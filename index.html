@@ -25,7 +25,6 @@
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   button { border:1px solid var(--border); background:var(--panel); color:var(--text); border-radius:8px; padding:9px 13px; cursor:pointer; }
-  button.primary { background:var(--accent); color:white; border-color:var(--accent); }
   button:hover { filter:brightness(1.08); }
   .chart-card { margin-top:18px; padding:16px; border:1px solid var(--border); border-radius:12px; }
   .chart-wrap { position:relative; width:100%; height:440px; }
@@ -36,7 +35,7 @@
   .result small { color:var(--muted); display:block; }
   .error { color:#dc2626; font-size:.85rem; min-height:1.3em; }
   details { margin-top:16px; color:var(--muted); }
-  code { background:var(--bg); padding:2px 5px; border-radius:4px; }
+  code { background:var(--panel); padding:2px 5px; border-radius:4px; }
   .legend { display:flex; flex-wrap:wrap; gap:14px; margin:8px 0 0; color:var(--muted); font-size:.9rem; }
   .swatch { display:inline-block; width:17px; height:4px; border-radius:4px; vertical-align:middle; margin-right:6px; }
   .chart-options { display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin:12px 0 4px; }
@@ -65,132 +64,114 @@
       </select>
     </label>
   </div>
-  <h1 data-i18n="title">エンジントルク曲線比較ツール</h1>
-  <p class="lead" data-i18n="lead">最大3種類のエンジンについて、出力・最大回転数・torqFormulaからトルク曲線を計算して重ねて比較します。</p>
+  <h1 data-i18n="title"></h1>
+  <p class="lead" data-i18n="lead"></p>
 
   <div class="toolbar">
-    <label style="margin:0"><span data-i18n="powerUnit">出力単位</span>
+    <label style="margin:0"><span data-i18n="powerUnit"></span>
       <select id="powerUnit" style="width:auto;display:inline-block;margin-left:6px">
-        <option value="hp">HP（英馬力）</option>
-        <option value="ps">PS（メートル馬力）</option>
+        <option value="hp">HP</option>
+        <option value="ps">PS</option>
         <option value="kw">kW</option>
       </select>
     </label>
-    <button id="reset" data-i18n="reset">入力をリセット</button>
+    <button id="reset" data-i18n="reset"></button>
   </div>
 
   <section class="engines" id="engines"></section>
   <p class="error" id="error" role="status"></p>
 
   <section class="chart-card">
-    <h2 id="chartTitle" style="margin:0" data-i18n="chartTitle">トルク曲線</h2>
-    <div class="muted" id="chartDescription" style="font-size:.85rem" data-i18n="chartDescription">横軸：エンジン回転数の相対値（%）／縦軸：トルク（kN·m）</div>
-    <div class="chart-options" id="chartOptions" aria-label="グラフ表示切り替え">
-      <label><input type="checkbox" id="showTorque" checked> <span data-i18n="torqueLine">トルク曲線（実線）</span></label>
-      <label><input type="checkbox" id="showPower" checked> <span data-i18n="powerLine">出力曲線（破線）</span></label>
+    <h2 style="margin:0" data-i18n="chartTitle"></h2>
+    <div class="muted" style="font-size:.85rem" data-i18n="chartDescription"></div>
+    <div class="chart-options">
+      <label><input type="checkbox" id="showTorque" checked> <span data-i18n="torqueLine"></span></label>
+      <label><input type="checkbox" id="showPower" checked> <span data-i18n="powerLine"></span></label>
     </div>
-    <div class="chart-wrap"><canvas id="chart" aria-label="トルク曲線と出力曲線の比較グラフ"></canvas></div>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
     <div class="legend" id="legend"></div>
     <div class="results" id="results"></div>
   </section>
 
   <details open>
-    <summary data-i18n="modelSummary">計算モデルと前提</summary>
-    <p data-i18n="modelP1">入力した係数から <code>f(x) = ax² + bx + c</code> を計算します。ここで <code>x</code> は最大回転数に対する割合（0～1）です。</p>
-    <p data-i18n="modelP2">トルクを <code>T(x) = Tbase × f(x)</code> と仮定し、指定された最大出力と一致するように基準トルクを逆算します。</p>
-    <p data-i18n="modelP3"><code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(x)))</code></p>
-    <p data-i18n="modelP4">出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。最大出力は0～100%の範囲内で発生すると仮定しています。曲線の負値は物理的なトルクとして扱わず、グラフ上では0にクリップします。</p>
-    <p data-i18n="modelP5"><strong>注意：</strong>これはtorqFormulaを二次関数とみなした推定モデルです。ゲーム内部の実装がこの式・正規化方法と一致することは未確認です。また、入力する最大出力はエンジン単体の最大出力を指定してください。</p>
+    <summary data-i18n="modelSummary"></summary>
+    <p data-i18n="modelP1"></p>
+    <p data-i18n="modelP2"></p>
+    <p data-i18n="modelP3"></p>
+    <p data-i18n="modelP4"></p>
+    <p data-i18n="modelP5"></p>
   </details>
 </main>
 <script>
 (() => {
   const colors = ["#2563eb", "#dc6b20", "#15966b"];
-  const defaults = [
-    {name:"Engine 1", power:"", rpm:"", a:"", b:"", c:""},
-    {name:"Engine 2", power:"", rpm:"", a:"", b:"", c:""},
-    {name:"Engine 3", power:"", rpm:"", a:"", b:"", c:""}
-  ];
+  // Common curve used when torqFormula is not defined (x = RPM / maxRPM). Estimated from the in-game graph.
+  const DEFAULT_CURVE = {a:-2, b:3, c:0};
+  const defaults = [1,2,3].map(n => ({name:`Engine ${n}`, power:"", rpm:"", minRpm:"", a:"", b:"", c:""}));
+  const FIELDS = ["power","rpm","minRpm","a","b","c"];
+
   const translations = {
     ja: {
       title:"エンジントルク曲線比較ツール",
-      lead:"最大3種類のエンジンについて、出力・最大回転数・torqFormulaからトルク曲線を計算して重ねて比較します。",
+      lead:"最大3種類のエンジンについて、出力・最低/最大回転数・torqFormulaからトルク曲線を計算して重ねて比較します。",
       powerUnit:"出力単位", reset:"入力をリセット", chartTitle:"トルク曲線",
-      chartDescription:"横軸：エンジン回転数の相対値（%）／縦軸：トルク（kN·m）",
+      chartDescription:"横軸：アイドリング回転数（0%）から最大回転数（100%）までの割合／縦軸：トルク（kN·m）",
       torqueLine:"トルク曲線（実線）", powerLine:"出力曲線（破線）",
       modelSummary:"計算モデルと前提",
-      modelP1:'入力した係数から <code>f(x) = ax² + bx + c</code> を計算します。ここで <code>x</code> は最大回転数に対する割合（0～1）です。',
-      modelP2:'トルクを <code>T(x) = Tbase × f(x)</code> と仮定し、指定された最大出力と一致するように基準トルクを逆算します。',
-      modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(x)))</code>',
-      modelP4:"出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。最大出力は0～100%の範囲内で発生すると仮定しています。曲線の負値は物理的なトルクとして扱わず、グラフ上では0にクリップします。",
-      modelP5:"<strong>注意：</strong>これはtorqFormulaを二次関数とみなした推定モデルです。ゲーム内部の実装がこの式・正規化方法と一致することは未確認です。また、入力する最大出力はエンジン単体の最大出力を指定してください。",
+      modelP1:'<code>f(x) = ax² + bx + c</code>、ここで <code>x = RPM ÷ maxRPM</code>（0～1）です。最低回転数以下では <code>x = minRPM ÷ maxRPM</code> のトルクで一定とします。',
+      modelP2:'トルクを <code>T(x) = Tbase × f(max(x, xmin))</code> と仮定し、指定された最大出力と一致するように基準トルクを逆算します。',
+      modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(max(x, xmin))))</code>',
+      modelP4:"出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。負のトルクは0にクリップします。torqFormulaが未定義の場合は、ゲーム内グラフから推定した共通曲線 <code>a=-2, b=3, c=0</code> を使用します。",
+      modelP5:"<strong>注意：</strong>torqFormulaを二次関数とみなした推定モデルです。ゲーム内部の実装との一致は未確認です。入力する最大出力はエンジン単体の値にしてください。",
       engine:"エンジン", configLabel:"設定ファイルのテキストを貼り付け",
-      clear:"パラメータテキスト削除", pastePlaceholder:"設定ファイル全文を貼り付け（gszabi99 BLK形式）",
+      clear:"パラメータテキスト削除", pastePlaceholder:"設定ファイル全文、または engine { ... } ブロックを貼り付け（JSON / BLK形式）",
       configHint:"貼り付けるとエンジン情報を自動で読み込みます。",
-      engineName:"エンジン名", maxOutput:"最大出力", maxRPM:"最大回転数",
-      coefficients:"torqFormula の係数", exampleName:"例：AGT1500",
+      engineName:"エンジン名", maxOutput:"最大出力", maxRPM:"最大回転数", minRPM:"最低回転数",
+      coefficients:"torqFormula の係数（空欄なら共通曲線）", exampleName:"例：AGT1500",
       statusCleared:"設定テキストとエンジンパラメータをすべてクリアしました。",
-      statusLoaded:"読み込みました。一部の項目が見つかりません：",
-      statusSuccess:"読み込み成功：", statusError:"読み込めません：",
-      missingPower:"horsePowers", missingRPM:"maxRPM", missingFormula:"torqFormula",
+      statusLoaded:"読み込みました。見つからない項目：",
+      statusSuccess:"読み込み成功：", statusDefault:"（torqFormulaなし：共通曲線を使用）", statusError:"読み込めません：",
+      missingPower:"horsePowers", missingRPM:"maxRPM", missingMin:"minRPM",
       engineBlockMissing:"engineブロックが見つかりません。",
-      errorIncomplete:"Engine {n}: Enter all fields; maximum output and maximum RPM must be greater than zero.",
-      errorFactor:"Engine {n}: The maximum value of x × f(x) is not positive. Check the coefficients.",
-      errorCalc:"Engine {n}: Calculation failed. Check the input values.",
-      errorPrefix:"エンジン{n}：全項目を入力し、最大出力と最大回転数を正の値にしてください。",
-      factorPrefix:"エンジン{n}：x × f(x) の最大値が正になりません。係数を確認してください。",
-      calcPrefix:"エンジン{n}：計算できません。入力値を確認してください。",
-      torqueAxis:"エンジン回転数の相対値", torqueUnit:"トルク (kN·m)", powerAxis:"出力",
-      legend:"Solid: torque / Dashed: power", baseTorque:"Estimated base torque:",
-      peakTorque:"Peak torque:", peakRPM:"Peak torque at",
-      maxPowerRPM:"Maximum power at"
+      errorIncomplete:"エンジン{n}：最大出力・最大回転数・最低回転数を入力してください（最低回転数は最大回転数未満）。",
+      errorCoef:"エンジン{n}：係数 a, b, c は3つとも入力するか、3つとも空欄にしてください。",
+      errorFactor:"エンジン{n}：出力が正になりません。係数を確認してください。",
+      torqueAxis:"アイドリング〜最大回転数（0% = アイドリング）", torqueUnit:"トルク (kN·m)", powerAxis:"出力",
+      legend:"実線: トルク / 破線: 出力", baseTorque:"推定基準トルク：",
+      peakTorque:"最大トルク：", maxPowerRPM:"最大出力の回転数：", minTorque:"最低回転数でのトルク：", usingDefault:"共通曲線を使用中"
     },
     en: {
       title:"Engine Torque Curve Comparator",
-      lead:"Calculate and compare torque curves for up to three engines using power, maximum RPM, and torqFormula coefficients.",
+      lead:"Calculate and compare torque curves for up to three engines using power, minimum/maximum RPM, and torqFormula coefficients.",
       powerUnit:"Power unit", reset:"Reset inputs", chartTitle:"Torque curves",
-      chartDescription:"X-axis: relative engine speed (%) / Y-axis: torque (kN·m)",
+      chartDescription:"X-axis: engine speed from idle (0%) to max RPM (100%) / Y-axis: torque (kN·m)",
       torqueLine:"Torque curve (solid)", powerLine:"Power curve (dashed)",
       modelSummary:"Calculation model and assumptions",
-      modelP1:'Calculates <code>f(x) = ax² + bx + c</code> from the entered coefficients. Here, <code>x</code> is the fraction of maximum RPM (0–1).',
-      modelP2:'Torque is assumed to be <code>T(x) = Tbase × f(x)</code>. The base torque is calculated so that the specified maximum power is matched.',
-      modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(x)))</code>',
-      modelP4:"Power is calculated in W, rotational speed in RPM, and torque in N·m; torque is displayed in kN·m. Maximum power is assumed to occur within the 0–100% RPM range. Negative curve values are clipped to zero in the graph.",
-      modelP5:"<strong>Note:</strong> This is an estimated model that treats torqFormula as a quadratic function. It has not been confirmed that the game's internal implementation uses this equation or normalization method. Enter the maximum power of the engine itself.",
+      modelP1:'<code>f(x) = ax² + bx + c</code>, where <code>x = RPM ÷ maxRPM</code> (0–1). Below the minimum RPM, torque is held at the value for <code>x = minRPM ÷ maxRPM</code>.',
+      modelP2:'Torque is assumed to be <code>T(x) = Tbase × f(max(x, xmin))</code>. The base torque is solved so that the specified maximum power is matched.',
+      modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(max(x, xmin))))</code>',
+      modelP4:"Power is calculated in W, speed in RPM, torque in N·m; torque is displayed in kN·m. Negative torque is clipped to zero. If torqFormula is undefined, the common curve <code>a=-2, b=3, c=0</code>, estimated from the in-game graph, is used.",
+      modelP5:"<strong>Note:</strong> This is an estimated model treating torqFormula as a quadratic. It has not been confirmed to match the game's internal implementation. Enter the maximum power of the engine itself.",
       engine:"Engine", configLabel:"Paste configuration text",
-      clear:"Clear parameter text", pastePlaceholder:"Paste the full configuration file (gszabi99 BLK format)",
+      clear:"Clear parameter text", pastePlaceholder:"Paste the full config file or the engine { ... } block (JSON / BLK format)",
       configHint:"Engine data will be imported automatically when text is pasted.",
-      engineName:"Engine name", maxOutput:"Maximum output", maxRPM:"Maximum RPM",
-      coefficients:"torqFormula coefficients", exampleName:"e.g. AGT1500",
+      engineName:"Engine name", maxOutput:"Maximum output", maxRPM:"Maximum RPM", minRPM:"Minimum RPM",
+      coefficients:"torqFormula coefficients (blank = common curve)", exampleName:"e.g. AGT1500",
       statusCleared:"Configuration text and all engine parameters have been cleared.",
-      statusLoaded:"Loaded, but some fields were not found: ",
-      statusSuccess:"Successfully loaded: ", statusError:"Unable to load: ",
-      missingPower:"horsePowers", missingRPM:"maxRPM", missingFormula:"torqFormula",
+      statusLoaded:"Loaded. Not found: ",
+      statusSuccess:"Successfully loaded: ", statusDefault:" (no torqFormula: using common curve)", statusError:"Unable to load: ",
+      missingPower:"horsePowers", missingRPM:"maxRPM", missingMin:"minRPM",
       engineBlockMissing:"Could not find an engine block.",
-      errorIncomplete:"Engine {n}: Enter all fields; maximum output and maximum RPM must be greater than zero.",
-      errorFactor:"Engine {n}: The maximum value of x × f(x) is not positive. Check the coefficients.",
-      errorCalc:"Engine {n}: Calculation failed. Check the input values.",
-      errorPrefix:"エンジン{n}：全項目を入力し、最大出力と最大回転数を正の値にしてください。",
-      factorPrefix:"エンジン{n}：x × f(x) の最大値が正になりません。係数を確認してください。",
-      calcPrefix:"エンジン{n}：計算できません。入力値を確認してください。",
-      torqueAxis:"Relative engine speed", torqueUnit:"Torque (kN·m)", powerAxis:"Power",
+      errorIncomplete:"Engine {n}: Enter maximum output, maximum RPM and minimum RPM (minimum must be below maximum).",
+      errorCoef:"Engine {n}: Enter all of a, b, c, or leave all three blank.",
+      errorFactor:"Engine {n}: Power is not positive. Check the coefficients.",
+      torqueAxis:"Idle to max RPM (0% = idle)", torqueUnit:"Torque (kN·m)", powerAxis:"Power",
       legend:"Solid: torque / Dashed: power", baseTorque:"Estimated base torque:",
-      peakTorque:"Peak torque:", peakRPM:"at",
-      maxPowerRPM:"Maximum power at"
+      peakTorque:"Peak torque:", maxPowerRPM:"Maximum power at", minTorque:"Torque at min RPM:", usingDefault:"Using common curve"
     }
   };
   let language = "ja";
-  const tr = (key) => translations[language][key] ?? translations.ja[key] ?? key;
-  function applyLanguage() {
-    document.documentElement.lang = language;
-    document.querySelectorAll("[data-i18n]").forEach(el => {
-      const key=el.dataset.i18n;
-      if (translations[language][key] !== undefined) el.innerHTML=translations[language][key];
-    });
-    document.querySelectorAll(".unit-label").forEach(el=>el.textContent=powerUnit.value.toUpperCase());
-    renderInputs(readInputs());
-    update();
-  }
+  const tr = key => translations[language][key] ?? translations.ja[key] ?? key;
 
   const root = document.getElementById("engines");
   const powerUnit = document.getElementById("powerUnit");
@@ -199,7 +180,16 @@
   const showTorque = document.getElementById("showTorque");
   const showPower = document.getElementById("showPower");
 
+  function applyLanguage() {
+    document.documentElement.lang = language;
+    document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = tr(el.dataset.i18n); });
+    renderInputs(readInputs());
+    update();
+  }
+  const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+
   function renderInputs(data) {
+    const u = powerUnit.value.toUpperCase();
     root.innerHTML = data.map((e,i) => `
       <article class="card">
         <h2><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colors[i]};margin-right:7px"></span>${tr("engine")} ${i+1}</h2>
@@ -212,250 +202,242 @@
           <div class="config-status" id="configStatus${i}">${tr("configHint")}</div>
         </div>
         <label>${tr("engineName")}</label>
-        <input data-i="${i}" data-k="name" value="${esc(e.name)}" placeholder="${tr("exampleName")}">
+        <input data-k="name" value="${esc(e.name)}" placeholder="${tr("exampleName")}">
         <div class="grid2">
-          <div><label>${tr("maxOutput")} (<span class="unit-label">${powerUnit.value.toUpperCase()}</span>)</label>
-          <input type="number" min="0" step="any" data-i="${i}" data-k="power" value="${esc(e.power)}" placeholder="1500"></div>
-          <div><label>${tr("maxRPM")} (RPM)</label>
-          <input type="number" min="0" step="any" data-i="${i}" data-k="rpm" value="${esc(e.rpm)}" placeholder="3000"></div>
+          <div><label>${tr("maxOutput")} (${u})</label><input type="number" min="0" step="any" data-k="power" value="${esc(e.power)}" placeholder="1500"></div>
+          <div><label>${tr("maxRPM")} (RPM)</label><input type="number" min="0" step="any" data-k="rpm" value="${esc(e.rpm)}" placeholder="3000"></div>
         </div>
+        <label>${tr("minRPM")} (RPM)</label>
+        <input type="number" min="0" step="any" data-k="minRpm" value="${esc(e.minRpm)}" placeholder="700">
         <label>${tr("coefficients")}</label>
         <div class="grid3">
-          <div><label>a</label><input type="number" step="any" data-i="${i}" data-k="a" value="${esc(e.a)}" placeholder="-0.88"></div>
-          <div><label>b</label><input type="number" step="any" data-i="${i}" data-k="b" value="${esc(e.b)}" placeholder="1.47"></div>
-          <div><label>c</label><input type="number" step="any" data-i="${i}" data-k="c" value="${esc(e.c)}" placeholder="0.41"></div>
+          <div><label>a</label><input type="number" step="any" data-k="a" value="${esc(e.a)}" placeholder="${DEFAULT_CURVE.a}"></div>
+          <div><label>b</label><input type="number" step="any" data-k="b" value="${esc(e.b)}" placeholder="${DEFAULT_CURVE.b}"></div>
+          <div><label>c</label><input type="number" step="any" data-k="c" value="${esc(e.c)}" placeholder="${DEFAULT_CURVE.c}"></div>
         </div>
       </article>`).join("");
-    root.querySelectorAll("input").forEach(el => el.addEventListener("input", update));
-    root.querySelectorAll(".config-text").forEach(el => el.addEventListener("input", () => {
-      const i=Number(el.dataset.i), status=document.getElementById(`configStatus${i}`);
-      if (!el.value.trim()) {
-        status.textContent=tr("configHint");
-        status.className="config-status";
-        return;
-      }
-      try {
-        const parsed=parseEngineConfig(el.value);
-        const card=root.querySelectorAll("article")[i];
-        const values={name:parsed.name,power:parsed.power,rpm:parsed.rpm,a:parsed.a,b:parsed.b,c:parsed.c};
-        Object.entries(values).forEach(([key,value])=>{
-          const field=card.querySelector(`[data-k="${key}"]`);
-          if(field) field.value=value ?? "";
-        });
-        const missing=[];
-        if(parsed.power==="") missing.push(tr("missingPower"));
-        if(parsed.rpm==="") missing.push(tr("missingRPM"));
-        if(parsed.a===""||parsed.b===""||parsed.c==="") missing.push(tr("missingFormula"));
-        status.textContent=missing.length
-          ? `${tr("statusLoaded")}${missing.join(", ")}`
-          : `${tr("statusSuccess")}${parsed.name}`;
-        status.className=missing.length?"config-status bad":"config-status ok";
-        update();
-      } catch(err) {
-        status.textContent=`${tr("statusError")}${err.message}`;
-        status.className="config-status bad";
-      }
-    }));
-    root.querySelectorAll(".clear-config").forEach(btn=>btn.addEventListener("click",()=>{
-      const i=Number(btn.dataset.i), area=root.querySelector(`.config-text[data-i="${i}"]`);
-      area.value="";
-      const card=root.querySelectorAll("article")[i];
-      card.querySelectorAll('input[data-k]').forEach(field=>field.value="");
-      const status=document.getElementById(`configStatus${i}`);
-      status.textContent=tr("statusCleared");
-      status.className="config-status";
+    root.querySelectorAll("input[data-k]").forEach(el => el.addEventListener("input", update));
+    root.querySelectorAll(".config-text").forEach(el => el.addEventListener("input", () => onConfigInput(el)));
+    root.querySelectorAll(".clear-config").forEach(btn => btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.i), card = root.querySelectorAll("article")[i];
+      card.querySelector(".config-text").value = "";
+      card.querySelectorAll("input[data-k]").forEach(f => f.value = "");
+      const st = document.getElementById(`configStatus${i}`);
+      st.textContent = tr("statusCleared"); st.className = "config-status";
       update();
     }));
   }
-  function parseEngineConfig(source) {
-    // The supplied vehicle files are JSON; engine is commonly nested under VehiclePhys.
-    const data=JSON.parse(source);
-    function findEngine(node) {
-      if (!node || typeof node!=="object") return null;
-      if (!Array.isArray(node) && node.engine && typeof node.engine==="object" && node.engine.torqFormula) return node.engine;
-      if (!Array.isArray(node) && node.engine && typeof node.engine==="object") return node.engine;
-      for (const value of Object.values(node)) {
-        const found=findEngine(value);
-        if(found) return found;
-      }
-      return null;
+
+  function onConfigInput(el) {
+    const i = Number(el.dataset.i), st = document.getElementById(`configStatus${i}`);
+    if (!el.value.trim()) { st.textContent = tr("configHint"); st.className = "config-status"; return; }
+    try {
+      const p = parseEngineConfig(el.value);
+      const card = root.querySelectorAll("article")[i];
+      FIELDS.concat("name").forEach(k => { const f = card.querySelector(`[data-k="${k}"]`); if (f) f.value = p[k] ?? ""; });
+      const missing = [];
+      if (p.power === "") missing.push(tr("missingPower"));
+      if (p.rpm === "") missing.push(tr("missingRPM"));
+      if (p.minRpm === "") missing.push(tr("missingMin"));
+      const noFormula = p.a === "" && p.b === "" && p.c === "";
+      st.textContent = missing.length
+        ? `${tr("statusLoaded")}${missing.join(", ")}`
+        : `${tr("statusSuccess")}${p.name}${noFormula ? tr("statusDefault") : ""}`;
+      st.className = missing.length ? "config-status bad" : "config-status ok";
+      update();
+    } catch (err) {
+      st.textContent = `${tr("statusError")}${err.message}`;
+      st.className = "config-status bad";
     }
-    const engine=findEngine(data);
-    if(!engine) throw new Error(tr("engineBlockMissing"));
-    const manufacturer=String(engine.manufacturer??"").trim();
-    const engineModel=String(engine.model??"").trim();
-    const rootModel=String(data.model??"").trim();
-    let name="";
-    if(manufacturer && engineModel) name=`${manufacturer}_${engineModel}`;
-    else if(engineModel) name=engineModel;
-    else if(manufacturer) name=manufacturer;
-    else name=rootModel;
-    const formula=engine.torqFormula && typeof engine.torqFormula==="object" ? engine.torqFormula : {};
-    const asText=value=>value===undefined||value===null||value===""?"":String(value);
+  }
+
+  // ---- Parsing: JSON first, then BLK-style text ("key:r = value", "block { ... }") ----
+  const asText = v => (v === undefined || v === null || v === "") ? "" : String(v);
+  function makeName(manufacturer, model, fallback) {
+    manufacturer = String(manufacturer ?? "").trim(); model = String(model ?? "").trim();
+    return manufacturer && model ? `${manufacturer}_${model}` : (model || manufacturer || String(fallback ?? "").trim());
+  }
+  function parseEngineConfig(source) {
+    let json = null;
+    try { json = JSON.parse(source); } catch (_) {}
+    return json !== null ? parseJsonConfig(json) : parseBlkConfig(source);
+  }
+  function parseJsonConfig(data) {
+    const find = node => {
+      if (!node || typeof node !== "object") return null;
+      if (!Array.isArray(node) && node.engine && typeof node.engine === "object") return node.engine;
+      for (const v of Object.values(node)) { const f = find(v); if (f) return f; }
+      return null;
+    };
+    const eng = find(data);
+    if (!eng) throw new Error(tr("engineBlockMissing"));
+    const tf = eng.torqFormula && typeof eng.torqFormula === "object" ? eng.torqFormula : {};
     return {
-      name,
-      power:asText(engine.horsePowers),
-      rpm:asText(engine.maxRPM),
-      a:asText(formula.a),
-      b:asText(formula.b),
-      c:asText(formula.c)
+      name: makeName(eng.manufacturer, eng.model, data.model),
+      power: asText(eng.horsePowers), rpm: asText(eng.maxRPM), minRpm: asText(eng.minRPM),
+      a: asText(tf.a), b: asText(tf.b), c: asText(tf.c)
     };
   }
-  function esc(s) { return String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
-  function readInputs() {
-    return [...root.querySelectorAll("article")].map((card,i) => {
-      const obj = {};
-      card.querySelectorAll("input").forEach(el => obj[el.dataset.k] = el.value);
-      return obj;
-    });
+  // Returns the text inside "key { ... }" using brace matching, or null.
+  function blkBlock(text, key) {
+    const m = new RegExp(`(^|[^\\w])${key}\\s*\\{`).exec(text);
+    if (!m) return null;
+    let i = m.index + m[0].length, depth = 1;
+    const start = i;
+    while (i < text.length && depth > 0) { if (text[i] === "{") depth++; else if (text[i] === "}") depth--; i++; }
+    return text.slice(start, depth === 0 ? i - 1 : i);
   }
-  function powerToW(v) {
-    if (powerUnit.value === "hp") return v * 745.699871582;
-    if (powerUnit.value === "ps") return v * 735.49875;
-    return v * 1000;
+  const blkNum = (text, key) => {
+    const m = new RegExp(`(^|[^\\w])${key}\\s*:\\s*\\w+\\s*=\\s*"?(-?\\d*\\.?\\d+(?:[eE][-+]?\\d+)?)`).exec(text);
+    return m ? m[2] : "";
+  };
+  const blkStr = (text, key) => {
+    const m = new RegExp(`(^|[^\\w])${key}\\s*:\\s*\\w+\\s*=\\s*"?([^"\\r\\n;]+)"?`).exec(text);
+    return m ? m[2].trim() : "";
+  };
+  function parseBlkConfig(source) {
+    const eng = blkBlock(source, "engine") ?? (/horsePowers|maxRPM|minRPM/.test(source) ? source : null);
+    if (eng === null) throw new Error(tr("engineBlockMissing"));
+    const tf = blkBlock(eng, "torqFormula") ?? "";
+    const stripped = tf ? eng.replace(tf, "") : eng;
+    return {
+      name: makeName(blkStr(stripped, "manufacturer"), blkStr(stripped, "model"), ""),
+      power: blkNum(stripped, "horsePowers"), rpm: blkNum(stripped, "maxRPM"), minRpm: blkNum(stripped, "minRPM"),
+      a: blkNum(tf, "a"), b: blkNum(tf, "b"), c: blkNum(tf, "c")
+    };
   }
-  function f(e,x) { return e.a*x*x + e.b*x + e.c; }
 
-  // max of x*f(x) on [0,1], checking endpoints and the analytic stationary point.
-  function maxPowerFactor(e) {
-    const candidates = [0,1];
-    // g(x)=x*f(x)=a*x^3+b*x^2+c*x; g'=3a*x^2+2b*x+c
-    const A=3*e.a, B=2*e.b, C=e.c;
-    if (Math.abs(A)<1e-14) {
-      if (Math.abs(B)>1e-14) {
-        const x=-C/B; if (x>0 && x<1) candidates.push(x);
-      }
-    } else {
-      const d=B*B-4*A*C;
-      if (d>=0) {
-        const s=Math.sqrt(d);
-        const x1=(-B+s)/(2*A), x2=(-B-s)/(2*A);
-        if (x1>0 && x1<1) candidates.push(x1);
-        if (x2>0 && x2<1) candidates.push(x2);
-      }
-    }
-    return Math.max(...candidates.map(x=>x*f(e,x)));
-  }
-  function maxTorque(e) {
-    const candidates=[0,1];
-    if (Math.abs(e.a)>1e-14) {
-      const x=-e.b/(2*e.a);
-      if (x>0 && x<1) candidates.push(x);
-    }
-    return candidates.map(x=>({x,y:f(e,x)})).reduce((p,q)=>q.y>p.y?q:p);
-  }
+  // ---- Calculation ----
+  const readInputs = () => [...root.querySelectorAll("article")].map(card => {
+    const o = {}; card.querySelectorAll("input[data-k]").forEach(el => o[el.dataset.k] = el.value); return o;
+  });
+  const UNIT_W = {hp:745.699871582, ps:735.49875, kw:1000};
+  const RAD = 2*Math.PI/60;
+
   function calculate(raw) {
-    const unit=powerUnit.value;
     return raw.map((r,i) => {
-      const vals=["power","rpm","a","b","c"].map(k=>Number(r[k]));
-      if (!r.name.trim() && vals.every((v,j)=>r[["power","rpm","a","b","c"][j]]==="")) return null;
-      if (vals.some((v,j)=>r[["power","rpm","a","b","c"][j]]==="") || !vals.every(Number.isFinite) || vals[0]<=0 || vals[1]<=0) return {error:language==="ja" ? `エンジン${i+1}：全項目を入力し、最大出力と最大回転数を正の値にしてください。` : tr("errorIncomplete").replace("{n}",i+1)};
-      const [power,rpm,a,b,c]=vals;
-      const e={...r,power,rpm,a,b,c};
-      const factor=maxPowerFactor(e);
-      if (!(factor>0)) return {error:language==="ja" ? `エンジン${i+1}：x × f(x) の最大値が正になりません。係数を確認してください。` : tr("errorFactor").replace("{n}",i+1)};
-      const pW=powerToW(power);
-      const base=pW/((2*Math.PI/60)*rpm*factor);
-      const peak=maxTorque(e);
-      if (!Number.isFinite(base) || !Number.isFinite(peak.y)) return {error:language==="ja" ? `エンジン${i+1}：計算できません。入力値を確認してください。` : tr("errorCalc").replace("{n}",i+1)};
-      return {name:r.name.trim()||(language==="ja"?`エンジン ${i+1}`:`Engine ${i+1}`),base,peakTorque:base*peak.y,peakX:peak.x,maxPowerX:findMaxPowerX(e),rpm,power,data:Array.from({length:101},(_,j)=>{
-        const x=j/100, torque=base*f(e,x), watts=Math.max(0,torque)*(rpm*x)*(2*Math.PI/60);
-        const output=powerUnit.value==="hp"?watts/745.699871582:powerUnit.value==="ps"?watts/735.49875:watts/1000;
-        return {x,t:torque,p:output};
-      })};
+      const n = i+1;
+      if (!(r.name||"").trim() && FIELDS.every(k => r[k] === "")) return null;
+      const power=Number(r.power), rpm=Number(r.rpm), minRpm=Number(r.minRpm);
+      if (["power","rpm","minRpm"].some(k => r[k] === "") || ![power,rpm,minRpm].every(Number.isFinite) || power<=0 || rpm<=0 || minRpm<0 || minRpm>=rpm)
+        return {error: tr("errorIncomplete").replace("{n}",n)};
+      const blank = ["a","b","c"].filter(k => r[k] === "").length;
+      if (blank === 1 || blank === 2) return {error: tr("errorCoef").replace("{n}",n)};
+      const usedDefault = blank === 3;
+      const co = usedDefault ? DEFAULT_CURVE : {a:Number(r.a), b:Number(r.b), c:Number(r.c)};
+      if (![co.a,co.b,co.c].every(Number.isFinite)) return {error: tr("errorCoef").replace("{n}",n)};
+
+      const xmin = minRpm/rpm;
+      // Torque shape: constant below min RPM, negative values clipped.
+      const fc = x => { const t = Math.max(x, xmin); return Math.max(0, co.a*t*t + co.b*t + co.c); };
+
+      let factor = 0, maxPowerX = 1, peakShape = 0, peakX = xmin;
+      const N = 4000;
+      for (let k=0; k<=N; k++) {
+        const x = k/N, pw = x*fc(x);
+        if (pw > factor) { factor = pw; maxPowerX = x; }
+        if (x >= xmin && fc(x) > peakShape) { peakShape = fc(x); peakX = x; }
+      }
+      if (!(factor > 0)) return {error: tr("errorFactor").replace("{n}",n)};
+      const base = power*UNIT_W[powerUnit.value] / (RAD*rpm*factor);
+
+      const xs = Array.from({length:201}, (_,j) => j/200);
+      if (!xs.includes(xmin)) xs.push(xmin);
+      xs.sort((p,q) => p-q);
+      const data = xs.map(x => {
+        const t = base*fc(x), watts = t*rpm*x*RAD;
+        return {x, t, p: watts/UNIT_W[powerUnit.value]};
+      });
+      return {
+        name: r.name.trim() || `${language==="ja"?"エンジン":"Engine"} ${n}`,
+        base, usedDefault, xmin, rpm, minRpm, minTorque: base*fc(xmin),
+        peakTorque: base*peakShape, peakX, maxPowerX, data
+      };
     });
   }
-  function findMaxPowerX(e) {
-    const candidates=[0,1], A=3*e.a, B=2*e.b, C=e.c;
-    if(Math.abs(A)<1e-14) { if(Math.abs(B)>1e-14){const x=-C/B;if(x>0&&x<1)candidates.push(x);} }
-    else {const d=B*B-4*A*C;if(d>=0){const s=Math.sqrt(d);for(const x of [(-B+s)/(2*A),(-B-s)/(2*A)])if(x>0&&x<1)candidates.push(x);}}
-    return candidates.reduce((best,x)=>x*f(e,x)>best*f(e,best)?x:best,candidates[0]);
-  }
-  // Select a readable 1/2/2.5/5/10 × 10^n tick interval.
+
+  // ---- Drawing ----
   function niceStep(range, targetTicks=10) {
-    const raw=Math.max(range/targetTicks,1e-12), power=Math.pow(10,Math.floor(Math.log10(raw)));
-    const fraction=raw/power;
-    const nice=fraction<=1?1:fraction<=2?2:fraction<=2.5?2.5:fraction<=5?5:10;
-    return nice*power;
+    const raw = Math.max(range/targetTicks, 1e-12), pw = Math.pow(10, Math.floor(Math.log10(raw))), fr = raw/pw;
+    return (fr<=1?1:fr<=2?2:fr<=2.5?2.5:fr<=5?5:10)*pw;
   }
   function draw(series) {
-    const rect=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
-    canvas.width=Math.max(1,Math.round(rect.width*dpr)); canvas.height=Math.max(1,Math.round(rect.height*dpr));
+    const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width*dpr)); canvas.height = Math.max(1, Math.round(rect.height*dpr));
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    const w=rect.width,h=rect.height;
-    const left=74,right=76,top=24,bottom=48,pw=w-left-right,ph=h-top-bottom;
-    const valid=series.filter(s=>s&&!s.error);
-    const torqueOn=showTorque.checked, powerOn=showPower.checked;
-    const maxTorqueValue=Math.max(0,...valid.flatMap(s=>s.data.map(p=>Math.max(0,p.t/1000))));
-    const maxPowerValue=Math.max(0,...valid.flatMap(s=>s.data.map(p=>Math.max(0,p.p))));
-    const torqueStep=niceStep(maxTorqueValue*1.08||1);
-    const powerStep=niceStep(maxPowerValue*1.08||1);
-    const torqueMax=Math.max(torqueStep,Math.ceil(maxTorqueValue*1.08/torqueStep)*torqueStep);
-    const powerMax=Math.max(powerStep,Math.ceil(maxPowerValue*1.08/powerStep)*powerStep);
-    const X=x=>left+x*pw, YT=y=>top+ph-(y/torqueMax)*ph, YP=y=>top+ph-(y/powerMax)*ph;
-    const dark=matchMedia("(prefers-color-scheme: dark)").matches;
-    const axis=dark?"#cbd5e1":"#596579", grid=dark?"#374151":"#e1e6ed";
-    ctx.clearRect(0,0,w,h);
-    ctx.font="12px system-ui,sans-serif"; ctx.lineWidth=1;
-    // Ten or more cleanly spaced divisions on both vertical axes.
-    for(let y=0; y<=torqueMax+torqueStep*1e-8; y+=torqueStep){
-      const yy=YT(y);
-      ctx.strokeStyle=grid;ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(w-right,yy);ctx.stroke();
-      ctx.fillStyle=axis;ctx.textAlign="right";ctx.textBaseline="middle";
-      ctx.fillText(y.toFixed(Math.max(0,Math.min(3,-Math.floor(Math.log10(torqueStep))))),left-10,yy);
+    const w = rect.width, h = rect.height, left=74, right=76, top=24, bottom=48, pw=w-left-right, ph=h-top-bottom;
+    const valid = series.filter(Boolean);
+    const maxT = Math.max(0, ...valid.flatMap(s => s.data.map(p => p.t/1000)));
+    const maxP = Math.max(0, ...valid.flatMap(s => s.data.map(p => p.p)));
+    const tStep = niceStep(maxT*1.08 || 1), pStep = niceStep(maxP*1.08 || 1);
+    const tMax = Math.max(tStep, Math.ceil(maxT*1.08/tStep)*tStep), pMax = Math.max(pStep, Math.ceil(maxP*1.08/pStep)*pStep);
+    const X = x => left + x*pw, YT = y => top+ph-(y/tMax)*ph, YP = y => top+ph-(y/pMax)*ph;
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed";
+    const dec = step => Math.max(0, Math.min(3, -Math.floor(Math.log10(step))));
+    ctx.clearRect(0,0,w,h); ctx.font = "12px system-ui,sans-serif"; ctx.lineWidth = 1;
+    for (let y=0; y<=tMax+tStep*1e-8; y+=tStep) {
+      const yy = YT(y);
+      ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(left,yy); ctx.lineTo(w-right,yy); ctx.stroke();
+      ctx.fillStyle = axis; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(tStep)), left-10, yy);
     }
-    for(let y=0; y<=powerMax+powerStep*1e-8; y+=powerStep){
-      const yy=YP(y);
-      ctx.fillStyle=axis;ctx.textAlign="left";ctx.textBaseline="middle";
-      ctx.fillText(y.toFixed(Math.max(0,Math.min(3,-Math.floor(Math.log10(powerStep))))),w-right+10,yy);
+    for (let y=0; y<=pMax+pStep*1e-8; y+=pStep) {
+      ctx.fillStyle = axis; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(pStep)), w-right+10, YP(y));
     }
-    for(let k=0;k<=10;k++){
-      const x=k/10,xx=X(x);
-      ctx.strokeStyle=dark?"#273244":"#edf0f4";ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,top+ph);ctx.stroke();
-      ctx.fillStyle=axis;ctx.textAlign="center";ctx.textBaseline="top";ctx.fillText(`${k*10}%`,xx,top+ph+9);
+    for (let k=0; k<=10; k++) {
+      const xx = X(k/10);
+      ctx.strokeStyle = dark ? "#273244" : "#edf0f4"; ctx.beginPath(); ctx.moveTo(xx,top); ctx.lineTo(xx,top+ph); ctx.stroke();
+      ctx.fillStyle = axis; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(`${k*10}%`, xx, top+ph+9);
     }
-    ctx.fillStyle=dark?"#f3f4f6":"#17202a";ctx.textAlign="center";ctx.textBaseline="alphabetic";ctx.font="13px system-ui,sans-serif";
-    ctx.fillText(tr("torqueAxis"),left+pw/2,h-7);
-    ctx.save();ctx.translate(17,top+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(tr("torqueUnit"),0,0);ctx.restore();
-    const unitLabel=powerUnit.value.toUpperCase();
-    ctx.save();ctx.translate(w-15,top+ph/2);ctx.rotate(Math.PI/2);ctx.fillText(`${tr("powerAxis")} (${unitLabel})`,0,0);ctx.restore();
+    ctx.fillStyle = dark ? "#f3f4f6" : "#17202a"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.font = "13px system-ui,sans-serif";
+    ctx.fillText(tr("torqueAxis"), left+pw/2, h-7);
+    ctx.save(); ctx.translate(17, top+ph/2); ctx.rotate(-Math.PI/2); ctx.fillText(tr("torqueUnit"), 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(w-15, top+ph/2); ctx.rotate(Math.PI/2); ctx.fillText(`${tr("powerAxis")} (${powerUnit.value.toUpperCase()})`, 0, 0); ctx.restore();
 
-    valid.forEach(s=>{
-      if(torqueOn){
-        ctx.strokeStyle=colors[s.index];ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.beginPath();
-        s.data.forEach((p,j)=>{const x=X(p.x),y=YT(Math.max(0,p.t/1000));if(j===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
-        const px=X(s.peakX),py=YT(Math.max(0,s.peakTorque/1000));
-        ctx.fillStyle=colors[s.index];ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();
+    // Display only: map x (= RPM/maxRPM) to idle..max (0..1); points below idle are not drawn.
+    const dx = (s, x) => (x - s.xmin) / (1 - s.xmin);
+    const line = (s, getY, dash) => {
+      ctx.strokeStyle = colors[s.index]; ctx.lineWidth = 2.5; ctx.setLineDash(dash); ctx.beginPath();
+      s.data.filter(p => p.x >= s.xmin - 1e-9).forEach((p,j) => { const x = X(dx(s,p.x)), y = getY(p); j ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
+      ctx.stroke();
+    };
+    valid.forEach(s => {
+      if (showTorque.checked) {
+        line(s, p => YT(p.t/1000), []);
+        ctx.fillStyle = colors[s.index]; ctx.beginPath(); ctx.arc(X(dx(s,s.peakX)), YT(s.peakTorque/1000), 4, 0, Math.PI*2); ctx.fill();
       }
-      if(powerOn){
-        ctx.strokeStyle=colors[s.index];ctx.lineWidth=2.5;ctx.setLineDash([8,5]);ctx.beginPath();
-        s.data.forEach((p,j)=>{const x=X(p.x),y=YP(Math.max(0,p.p));if(j===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
-      }
+      if (showPower.checked) line(s, p => YP(p.p), [8,5]);
     });
     ctx.setLineDash([]);
   }
+
   function update() {
-    const raw=readInputs(), calculated=calculate(raw);
-    const errors=calculated.filter(x=>x&&x.error).map(x=>x.error);
-    document.getElementById("error").textContent=errors.join(" ");
-    const series=calculated.map((s,i)=>s&&!s.error?{...s,index:i}:null);
+    const calculated = calculate(readInputs());
+    document.getElementById("error").textContent = calculated.filter(x => x && x.error).map(x => x.error).join(" ");
+    const series = calculated.map((s,i) => s && !s.error ? {...s, index:i} : null);
     draw(series);
-    document.getElementById("legend").innerHTML=series.map(s=>s?`<span style="color:${colors[s.index]}"><i class="line-key"></i><i class="line-key dashed"></i>${esc(s.name)} (${tr("legend")})</span>`:"").join("");
-    document.getElementById("results").innerHTML=series.map(s=>s?`
+    document.getElementById("legend").innerHTML = series.map(s => s
+      ? `<span style="color:${colors[s.index]}"><i class="line-key"></i><i class="line-key dashed"></i>${esc(s.name)} (${tr("legend")})</span>` : "").join("");
+    const rel = (s,x) => ((x - s.xmin)/(1 - s.xmin)*100).toFixed(1);
+    document.getElementById("results").innerHTML = series.map(s => s ? `
       <div class="result">
         <strong><i class="swatch" style="background:${colors[s.index]}"></i>${esc(s.name)}</strong>
         <small>${tr("baseTorque")} ${(s.base/1000).toFixed(4)} kN·m</small>
-        <small>${tr("peakTorque")} ${(s.peakTorque/1000).toFixed(4)} kN·m (${(s.peakX*100).toFixed(1)}%)</small>
-        <small>${tr("maxPowerRPM")} ${(s.maxPowerX*100).toFixed(1)}%</small>
-      </div>`:"").join("");
+        <small>${tr("peakTorque")} ${(s.peakTorque/1000).toFixed(4)} kN·m (${rel(s,s.peakX)}%)</small>
+        <small>${tr("minTorque")} ${(s.minTorque/1000).toFixed(4)} kN·m (${s.minRpm} RPM)</small>
+        <small>${tr("maxPowerRPM")} ${rel(s,s.maxPowerX)}% (${Math.round(s.maxPowerX*s.rpm)} RPM)</small>
+        ${s.usedDefault ? `<small>${tr("usingDefault")}</small>` : ""}
+      </div>` : "").join("");
   }
-  document.getElementById("language").addEventListener("change",e=>{language=e.target.value;applyLanguage();});
-  powerUnit.addEventListener("change",()=>{document.querySelectorAll(".unit-label").forEach(e=>e.textContent=powerUnit.value.toUpperCase());update();});
-  showTorque.addEventListener("change",update);
-  showPower.addEventListener("change",update);
-  document.getElementById("reset").addEventListener("click",()=>{renderInputs(defaults);update();});
-  window.addEventListener("resize",update);
-  renderInputs(defaults); update();
+
+  document.getElementById("language").addEventListener("change", e => { language = e.target.value; applyLanguage(); });
+  powerUnit.addEventListener("change", () => { renderInputs(readInputs()); update(); });
+  showTorque.addEventListener("change", update);
+  showPower.addEventListener("change", update);
+  document.getElementById("reset").addEventListener("click", () => { renderInputs(defaults); update(); });
+  window.addEventListener("resize", update);
+  renderInputs(defaults);
+  applyLanguage();
 })();
 </script>
 </body>
