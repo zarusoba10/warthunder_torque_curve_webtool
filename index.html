@@ -10,6 +10,7 @@
     :root { --bg:#111827; --panel:#1f2937; --text:#f3f4f6; --muted:#aab4c4; --border:#374151; --accent:#60a5fa; }
   }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; padding:24px; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
   main { max-width:1200px; margin:auto; }
   h1 { font-size:1.65rem; margin:0 0 6px; }
@@ -24,11 +25,23 @@
   input,select { width:100%; min-width:0; padding:9px 10px; border:1px solid var(--border); border-radius:7px; color:var(--text); background:var(--bg); }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .pgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:0 12px; }
   button { border:1px solid var(--border); background:var(--panel); color:var(--text); border-radius:8px; padding:9px 13px; cursor:pointer; }
   button:hover { filter:brightness(1.08); }
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px; }
+  .tab { border-bottom:none; border-radius:8px 8px 0 0; padding:9px 18px; color:var(--muted); }
+  .tab.active { background:var(--bg); color:var(--accent); font-weight:600; border-bottom:2px solid var(--bg); margin-bottom:-1px; }
   .chart-card { margin-top:18px; padding:16px; border:1px solid var(--border); border-radius:12px; }
   .chart-wrap { position:relative; width:100%; height:440px; }
+  .chart-wrap.tall { height:auto; aspect-ratio:5/6; }
+  .pinputs { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; }
+  .pcharts { display:grid; grid-template-columns:1fr; max-width:600px; margin:0 auto; gap:18px; }
+  .pcharts.two { grid-template-columns:1fr 1fr; max-width:none; }
+  .ppanel { min-width:0; }
+  .pcharts.overlay #pPanel1 .chart-wrap { display:none; }
+  @media(max-width:760px) { .pcharts.two { grid-template-columns:1fr; max-width:600px; } }
   canvas { width:100%; height:100%; display:block; }
+  .chart-wrap.tall canvas { position:absolute; inset:0; }
   .results { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:14px; }
   .result { border:1px solid var(--border); border-radius:9px; padding:11px 12px; }
   .result strong { display:block; margin-bottom:4px; }
@@ -51,23 +64,14 @@
   .config-status { min-height:1.2em; margin-top:4px; color:var(--muted); font-size:.78rem; }
   .config-status.ok { color:#15966b; }
   .config-status.bad { color:#dc2626; }
+  .phead { text-align:center; margin:10px 0 6px; }
+  .phead .vn { font-size:1.25rem; font-weight:700; }
   @media(max-width:600px) { body { padding:14px; } .chart-wrap { height:340px; } }
 </style>
 </head>
 <body>
 <main>
   <div class="toolbar" style="justify-content:flex-end;margin-bottom:8px">
-    <label style="margin:0">Language / 言語
-      <select id="language" aria-label="Language" style="width:auto;display:inline-block;margin-left:6px">
-        <option value="ja">日本語</option>
-        <option value="en">English</option>
-      </select>
-    </label>
-  </div>
-  <h1 data-i18n="title"></h1>
-  <p class="lead" data-i18n="lead"></p>
-
-  <div class="toolbar">
     <label style="margin:0"><span data-i18n="powerUnit"></span>
       <select id="powerUnit" style="width:auto;display:inline-block;margin-left:6px">
         <option value="hp">HP</option>
@@ -75,33 +79,95 @@
         <option value="kw">kW</option>
       </select>
     </label>
-    <button id="reset" data-i18n="reset"></button>
+    <label style="margin:0">Language / 言語
+      <select id="language" aria-label="Language" style="width:auto;display:inline-block;margin-left:6px">
+        <option value="ja">日本語</option>
+        <option value="en">English</option>
+      </select>
+    </label>
   </div>
 
-  <section class="engines" id="engines"></section>
-  <p class="error" id="error" role="status"></p>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" role="tab" data-tab="torque" data-i18n="tabTorque"></button>
+    <button class="tab" role="tab" data-tab="perf" data-i18n="tabPerf"></button>
+  </nav>
 
-  <section class="chart-card">
-    <h2 style="margin:0" data-i18n="chartTitle"></h2>
-    <div class="muted" style="font-size:.85rem" data-i18n="chartDescription"></div>
-    <div class="chart-options">
-      <label><input type="checkbox" id="showTorque" checked> <span data-i18n="torqueLine"></span></label>
-      <label><input type="checkbox" id="showPower" checked> <span data-i18n="powerLine"></span></label>
-      <label><input type="checkbox" id="absAxis"> <span data-i18n="absAxis"></span></label>
+  <!-- ===== Tab 1: Torque curves ===== -->
+  <section id="tab-torque">
+    <h1 data-i18n="title"></h1>
+    <p class="lead" data-i18n="lead"></p>
+
+    <div class="toolbar">
+      <button id="reset" data-i18n="reset"></button>
     </div>
-    <div class="chart-wrap"><canvas id="chart"></canvas></div>
-    <div class="legend" id="legend"></div>
-    <div class="results" id="results"></div>
+
+    <section class="engines" id="engines"></section>
+    <p class="error" id="error" role="status"></p>
+
+    <section class="chart-card">
+      <h2 style="margin:0" data-i18n="chartTitle"></h2>
+      <div class="muted" style="font-size:.85rem" data-i18n="chartDescription"></div>
+      <div class="chart-options">
+        <label><input type="checkbox" id="showTorque" checked> <span data-i18n="torqueLine"></span></label>
+        <label><input type="checkbox" id="showPower" checked> <span data-i18n="powerLine"></span></label>
+        <label><input type="checkbox" id="absAxis"> <span data-i18n="absAxis"></span></label>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      <div class="legend" id="legend"></div>
+      <div class="results" id="results"></div>
+    </section>
+
+    <details open>
+      <summary data-i18n="modelSummary"></summary>
+      <p data-i18n="modelP1"></p>
+      <p data-i18n="modelP2"></p>
+      <p data-i18n="modelP3"></p>
+      <p data-i18n="modelP4"></p>
+      <p data-i18n="modelP5"></p>
+    </details>
   </section>
 
-  <details open>
-    <summary data-i18n="modelSummary"></summary>
-    <p data-i18n="modelP1"></p>
-    <p data-i18n="modelP2"></p>
-    <p data-i18n="modelP3"></p>
-    <p data-i18n="modelP4"></p>
-    <p data-i18n="modelP5"></p>
-  </details>
+  <!-- ===== Tab 2: Performance curves ===== -->
+  <section id="tab-perf" hidden>
+    <h1 data-i18n="pTitle"></h1>
+    <p class="lead" data-i18n="pLead"></p>
+
+    <div class="pinputs" id="pInputs"></div>
+    <p class="error" id="pError" role="status"></p>
+
+    <section class="chart-card">
+      <div class="chart-options" style="justify-content:center">
+        <label><input type="checkbox" id="showCurves" checked> <span data-i18n="showCurves"></span></label>
+        <label><input type="checkbox" id="showLines" checked> <span data-i18n="showLines"></span></label>
+        <label><input type="checkbox" id="showPCurve"> <span data-i18n="showPCurve"></span></label>
+        <label><input type="checkbox" id="showDrag" checked> <span data-i18n="showDrag"></span></label>
+        <label><input type="checkbox" id="showOverlay"> <span data-i18n="showOverlay"></span></label>
+      </div>
+      <div class="pcharts" id="pCharts">
+        <div class="ppanel" id="pPanel0" hidden>
+          <div class="phead" id="pHead0"></div>
+          <div class="chart-wrap tall"><canvas id="pChart0"></canvas></div>
+          <div class="legend" id="pLegend0" style="justify-content:center"></div>
+          <div class="results" id="pResults0"></div>
+        </div>
+        <div class="ppanel" id="pPanel1" hidden>
+          <div class="phead" id="pHead1"></div>
+          <div class="chart-wrap tall"><canvas id="pChart1"></canvas></div>
+          <div class="legend" id="pLegend1" style="justify-content:center"></div>
+          <div class="results" id="pResults1"></div>
+        </div>
+      </div>
+    </section>
+
+    <details open>
+      <summary data-i18n="pModelSummary"></summary>
+      <p data-i18n="pM1"></p>
+      <p data-i18n="pM2"></p>
+      <p data-i18n="pM3"></p>
+      <p data-i18n="pM4"></p>
+      <p data-i18n="pM5"></p>
+    </details>
+  </section>
 </main>
 <script>
 (() => {
@@ -133,13 +199,37 @@
       statusLoaded:"読み込みました。見つからない項目：",
       statusSuccess:"読み込み成功：", statusDefault:"（torqFormulaなし：共通曲線を使用）", statusError:"読み込めません：",
       missingPower:"horsePowers", missingRPM:"maxRPM", missingMin:"minRPM",
+      missingGears:"gearRatios", missingFinal:"mainGearRatio", missingRadius:"driveGearRadius",
       engineBlockMissing:"engineブロックが見つかりません。",
       errorIncomplete:"エンジン{n}：最大出力・最大回転数・最低回転数を入力してください（最低回転数は最大回転数未満）。",
       errorCoef:"エンジン{n}：係数 a, b, c は3つとも入力するか、3つとも空欄にしてください。",
       errorFactor:"エンジン{n}：出力が正になりません。係数を確認してください。",
       torqueAxis:"アイドリング〜最大回転数（0% = アイドリング）", torqueAxisAbs:"エンジン回転数 (RPM)", torqueUnit:"トルク (kN·m)", powerAxis:"出力",
       legend:"実線: トルク / 破線: 出力", baseTorque:"推定基準トルク：",
-      peakTorque:"最大トルク：", maxPowerRPM:"最大出力の回転数：", minTorque:"最低回転数でのトルク：", usingDefault:"共通曲線を使用中"
+      peakTorque:"最大トルク：", maxPowerRPM:"最大出力の回転数：", minTorque:"最低回転数でのトルク：", usingDefault:"共通曲線を使用中",
+      // performance tab
+      tabTorque:"トルク曲線", tabPerf:"エンジン性能曲線",
+      pTitle:"エンジン性能曲線", pVehicle:"車両", showOverlay:"2台を1つのグラフに重ねる", showDrag:"抗力線（傾斜別）を表示", pDragName:"抗力線（傾斜別）", vehMass:"重量 (kg)（既定：Mass.TakeOff）", missingMass:"Mass.TakeOff", pErrMass:"重量を正の数で入力してください（空欄なら抗力線は描画しません）。", pClimb:"最大牽引力で登れる傾斜：", pNoClimb:"平地でも走行不可",
+      pM5:"抗力線：抗力 = 重量 × g × (sinθ + Crr × cosθ)、θ = atan(傾斜%/100)。傾斜は 2%・5%・7%・10% と、以降5%刻みで角度30°を超える最初の値（60%）まで。Crr = 0.05（InteractPropsList.tankTrack の road の rollingFrictionK）。<strong>空気抵抗は考慮していません。</strong>重量は Mass.TakeOff（燃料込み）を既定値とし、空欄なら抗力線は描画しません。牽引力軸の範囲外になる傾斜の線は表示しません。", showPCurve:"定出力曲線を表示", pCurveName:"定出力曲線", pM4:"定出力曲線：牽引力 [N] = 最大出力 [W] ÷ 車速 [m/s]（効率100%の理想曲線）。このモデルでは各ギアの牽引力曲線が、その段の最大出力点でこの曲線に接します。ゲーム内部の計算方法との一致は未確認です。", pOptional:"（入力が成立すると横に並べて比較表示）",
+      pLead:"車両パラメータを1台分貼り付けると、各ギア段の「車速–回転数」直線と「車速–牽引力」曲線を表示します（摩擦・効率を無視した理論値）。車両2も入力すると、横に並べて比較できます（比較時は両グラフの軸を共通にします）。",
+      pPaste:"車両パラメータテキストを貼り付け",
+      pPlaceholder:"車両設定ファイルの全文を貼り付け（先頭の model、VehiclePhys の engine / mechanics を読み込みます）",
+      pHint:"貼り付けると車両情報を自動で読み込みます。",
+      vehicleName:"車両名", gearRatios:"ギア比（前進段・カンマ区切り）", finalRatio:"最終減速比（main × side）", wheelRadius:"駆動輪半径 (m)",
+      showCurves:"牽引力曲線（実線）", showLines:"ギア直線（破線）",
+      pAxisX:"車速 (km/h)", pAxisF:"牽引力 (kN)", pAxisR:"エンジン回転数 (RPM)",
+      gear:"{n}速",
+      pErrEngine:"最大出力・最大回転数・最低回転数を入力してください（最低回転数は最大回転数未満）。",
+      pErrCoef:"係数 a, b, c は3つとも入力するか、3つとも空欄にしてください。",
+      pErrGears:"ギア比を正の数で1つ以上入力してください。",
+      pErrFinal:"最終減速比を正の数で入力してください。",
+      pErrRadius:"車輪半径を正の数で入力してください。",
+      pErrFactor:"出力が正になりません。係数を確認してください。",
+      pTotal:"総減速比：", pVmax:"最高速度：", pFmax:"最大牽引力：",
+      pModelSummary:"計算式と前提",
+      pM1:'車速 [km/h] = 3.6 × RPM × 2π/60 × 車輪半径 ÷ (ギア比 × 最終減速比)　／　牽引力 [N] = エンジントルク × ギア比 × 最終減速比 ÷ 車輪半径',
+      pM2:'最終減速比 = <code>mainGearRatio × sideGearRatio</code>、車輪半径 = <code>driveGearRadius</code>。前進段（正のギア比）のみ使用し、後進・中立は無視します。',
+      pM3:'エンジントルクはトルク曲線タブと同じ推定モデルです。効率・摩擦・スリップは考慮しない理論値で、牽引力曲線は最低回転数〜最大回転数の範囲のみ描画します。ギア直線は回転数0から描画します。'
     },
     en: {
       title:"Engine Torque Curve Comparator",
@@ -162,31 +252,58 @@
       statusLoaded:"Loaded. Not found: ",
       statusSuccess:"Successfully loaded: ", statusDefault:" (no torqFormula: using common curve)", statusError:"Unable to load: ",
       missingPower:"horsePowers", missingRPM:"maxRPM", missingMin:"minRPM",
+      missingGears:"gearRatios", missingFinal:"mainGearRatio", missingRadius:"driveGearRadius",
       engineBlockMissing:"Could not find an engine block.",
       errorIncomplete:"Engine {n}: Enter maximum output, maximum RPM and minimum RPM (minimum must be below maximum).",
       errorCoef:"Engine {n}: Enter all of a, b, c, or leave all three blank.",
       errorFactor:"Engine {n}: Power is not positive. Check the coefficients.",
       torqueAxis:"Idle to max RPM (0% = idle)", torqueAxisAbs:"Engine speed (RPM)", torqueUnit:"Torque (kN·m)", powerAxis:"Power",
       legend:"Solid: torque / Dashed: power", baseTorque:"Estimated base torque:",
-      peakTorque:"Peak torque:", maxPowerRPM:"Maximum power at", minTorque:"Torque at min RPM:", usingDefault:"Using common curve"
+      peakTorque:"Peak torque:", maxPowerRPM:"Maximum power at", minTorque:"Torque at min RPM:", usingDefault:"Using common curve",
+      // performance tab
+      tabTorque:"Torque curves", tabPerf:"Performance curves",
+      pTitle:"Engine performance curves", pVehicle:"Vehicle", showOverlay:"Overlay both vehicles in one graph", showDrag:"Show resistance lines (by slope)", pDragName:"Resistance (by slope)", vehMass:"Mass (kg) (default: Mass.TakeOff)", missingMass:"Mass.TakeOff", pErrMass:"Enter a positive mass (leave blank to hide resistance lines).", pClimb:"Slope climbable at peak traction:", pNoClimb:"cannot move even on flat ground",
+      pM5:"Resistance lines: resistance = mass × g × (sinθ + Crr × cosθ), θ = atan(slope%/100). Slopes: 2%, 5%, 7%, 10%, then every 5% up to the first value above 30° (60%). Crr = 0.05 (rollingFrictionK of road in InteractPropsList.tankTrack). <strong>Air resistance is not considered.</strong> Mass defaults to Mass.TakeOff (with fuel); leave blank to hide the lines. Lines above the traction axis range are not shown.", showPCurve:"Show constant-power curve", pCurveName:"Constant power curve", pM4:"Constant-power curve: traction [N] = max power [W] ÷ speed [m/s] (ideal, 100% efficiency). In this model each gear's traction curve touches it at that gear's max-power point. Agreement with the game's internal calculation is unconfirmed.", pOptional:"(shown side by side once valid)",
+      pLead:"Paste the parameters of one vehicle to plot each gear's speed–RPM line and speed–traction-force curve (theoretical values, ignoring friction and efficiency). Fill in Vehicle 2 as well to compare side by side (both charts then share the same axes).",
+      pPaste:"Paste vehicle parameter text",
+      pPlaceholder:"Paste the full vehicle config (reads the top-level model and engine / mechanics in VehiclePhys)",
+      pHint:"Vehicle data will be imported automatically when text is pasted.",
+      vehicleName:"Vehicle name", gearRatios:"Gear ratios (forward, comma-separated)", finalRatio:"Final drive ratio (main × side)", wheelRadius:"Drive wheel radius (m)",
+      showCurves:"Traction curves (solid)", showLines:"Gear lines (dashed)",
+      pAxisX:"Speed (km/h)", pAxisF:"Traction force (kN)", pAxisR:"Engine speed (RPM)",
+      gear:"Gear {n}",
+      pErrEngine:"Enter maximum output, maximum RPM and minimum RPM (minimum must be below maximum).",
+      pErrCoef:"Enter all of a, b, c, or leave all three blank.",
+      pErrGears:"Enter at least one positive gear ratio.",
+      pErrFinal:"Enter a positive final drive ratio.",
+      pErrRadius:"Enter a positive wheel radius.",
+      pErrFactor:"Power is not positive. Check the coefficients.",
+      pTotal:"Total ratio:", pVmax:"Top speed:", pFmax:"Peak traction:",
+      pModelSummary:"Formulas and assumptions",
+      pM1:'Speed [km/h] = 3.6 × RPM × 2π/60 × wheel radius ÷ (gear ratio × final ratio) / Traction [N] = engine torque × gear ratio × final ratio ÷ wheel radius',
+      pM2:'Final ratio = <code>mainGearRatio × sideGearRatio</code>, wheel radius = <code>driveGearRadius</code>. Only forward (positive) ratios are used; reverse and neutral are ignored.',
+      pM3:'Engine torque uses the same estimated model as the torque tab. Efficiency, friction and slip are ignored. Traction curves are drawn only from min to max RPM; gear lines start from 0 RPM.'
     }
   };
   let language = "ja";
   const tr = key => translations[language][key] ?? translations.ja[key] ?? key;
+  const $ = id => document.getElementById(id);
 
-  const root = document.getElementById("engines");
-  const powerUnit = document.getElementById("powerUnit");
-  const canvas = document.getElementById("chart");
+  const root = $("engines");
+  const powerUnit = $("powerUnit");
+  const canvas = $("chart");
   const ctx = canvas.getContext("2d");
-  const showTorque = document.getElementById("showTorque");
-  const showPower = document.getElementById("showPower");
-  const absAxis = document.getElementById("absAxis");
+  const showTorque = $("showTorque");
+  const showPower = $("showPower");
+  const absAxis = $("absAxis");
 
   function applyLanguage() {
     document.documentElement.lang = language;
     document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = tr(el.dataset.i18n); });
+    perfLang();
     renderInputs(readInputs());
     update();
+    updatePerf();
   }
   const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 
@@ -224,14 +341,14 @@
       const i = Number(btn.dataset.i), card = root.querySelectorAll("article")[i];
       card.querySelector(".config-text").value = "";
       card.querySelectorAll("input[data-k]").forEach(f => f.value = "");
-      const st = document.getElementById(`configStatus${i}`);
+      const st = $(`configStatus${i}`);
       st.textContent = tr("statusCleared"); st.className = "config-status";
       update();
     }));
   }
 
   function onConfigInput(el) {
-    const i = Number(el.dataset.i), st = document.getElementById(`configStatus${i}`);
+    const i = Number(el.dataset.i), st = $(`configStatus${i}`);
     if (!el.value.trim()) { st.textContent = tr("configHint"); st.className = "config-status"; return; }
     try {
       const p = parseEngineConfig(el.value);
@@ -363,8 +480,11 @@
     const raw = Math.max(range/targetTicks, 1e-12), pw = Math.pow(10, Math.floor(Math.log10(raw))), fr = raw/pw;
     return (fr<=1?1:fr<=2?2:fr<=2.5?2.5:fr<=5?5:10)*pw;
   }
+  // Number of decimals needed to print multiples of a tick step (e.g. 2.5 -> 1)
+  const decOf = step => { const t = +step.toFixed(6); return Math.min(3, t % 1 === 0 ? 0 : String(t).split(".")[1].length); };
   function draw(series) {
     const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if (rect.width < 10) return;
     canvas.width = Math.max(1, Math.round(rect.width*dpr)); canvas.height = Math.max(1, Math.round(rect.height*dpr));
     ctx.setTransform(dpr,0,0,dpr,0,0);
     const w = rect.width, h = rect.height, left=74, right=76, top=24, bottom=48, pw=w-left-right, ph=h-top-bottom;
@@ -376,7 +496,7 @@
     const X = x => left + x*pw, YT = y => top+ph-(y/tMax)*ph, YP = y => top+ph-(y/pMax)*ph;
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed";
-    const dec = step => Math.max(0, Math.min(3, -Math.floor(Math.log10(step))));
+    const dec = decOf;
     ctx.clearRect(0,0,w,h); ctx.font = "12px system-ui,sans-serif"; ctx.lineWidth = 1;
     for (let y=0; y<=tMax+tStep*1e-8; y+=tStep) {
       const yy = YT(y);
@@ -425,13 +545,13 @@
 
   function update() {
     const calculated = calculate(readInputs());
-    document.getElementById("error").textContent = calculated.filter(x => x && x.error).map(x => x.error).join(" ");
+    $("error").textContent = calculated.filter(x => x && x.error).map(x => x.error).join(" ");
     const series = calculated.map((s,i) => s && !s.error ? {...s, index:i} : null);
     draw(series);
-    document.getElementById("legend").innerHTML = series.map(s => s
+    $("legend").innerHTML = series.map(s => s
       ? `<span style="color:${colors[s.index]}"><i class="line-key"></i><i class="line-key dashed"></i>${esc(s.name)} (${tr("legend")})</span>` : "").join("");
     const rel = (s,x) => ((x - s.xmin)/(1 - s.xmin)*100).toFixed(1);
-    document.getElementById("results").innerHTML = series.map(s => s ? `
+    $("results").innerHTML = series.map(s => s ? `
       <div class="result">
         <strong><i class="swatch" style="background:${colors[s.index]}"></i>${esc(s.name)}</strong>
         <small>${tr("baseTorque")} ${(s.base/1000).toFixed(4)} kN·m</small>
@@ -442,13 +562,301 @@
       </div>` : "").join("");
   }
 
-  document.getElementById("language").addEventListener("change", e => { language = e.target.value; applyLanguage(); });
-  powerUnit.addEventListener("change", () => { renderInputs(readInputs()); update(); });
+  // =====================================================================
+  // Performance tab: speed vs. traction force / engine RPM
+  // =====================================================================
+  const PFK = ["vname","ename","power","rpm","minRpm","a","b","c","gears","final","radius","mass"];
+  const showCurves = $("showCurves"), showLines = $("showLines"), showPCurve = $("showPCurve"), showOverlay = $("showOverlay"), showDrag = $("showDrag");
+  const G = 9.80665, ROAD_CRR = 0.05;
+  const SLOPES = (() => { const a = [2,5,7]; for (let s=10;; s+=5) { a.push(s); if (Math.atan(s/100)*180/Math.PI > 30) break; } return a; })();
+  const fmtNum = v => String(+v.toPrecision(10));
+  const gearColor = (i, n) => `hsl(${Math.round(i*330/Math.max(n,1))},75%,${matchMedia("(prefers-color-scheme: dark)").matches ? 62 : 46}%)`;
+  const gearName = n => tr("gear").replace("{n}", n);
+
+  const pfCard = i => `
+    <div class="card" data-v="${i}">
+      <h2><span data-i18n="pVehicle"></span> ${i+1}${i ? ` <span class="muted" style="font-weight:400;font-size:.8rem" data-i18n="pOptional"></span>` : ""}</h2>
+      <div class="config-box">
+        <div class="config-head">
+          <label data-i18n="pPaste"></label>
+          <button type="button" class="pClear" data-i18n="clear"></button>
+        </div>
+        <textarea class="pText"></textarea>
+        <div class="config-status pStatus"></div>
+      </div>
+      <div class="pgrid">
+        <div><label><span data-i18n="vehicleName"></span></label><input data-pk="vname" placeholder="leopard_2a4"></div>
+        <div><label><span data-i18n="engineName"></span></label><input data-pk="ename" placeholder="mtu_mb_873_ka_501"></div>
+        <div><label><span data-i18n="maxOutput"></span> (<span class="pUnit">HP</span>)</label><input type="number" min="0" step="any" data-pk="power" placeholder="1500"></div>
+        <div><label><span data-i18n="maxRPM"></span> (RPM)</label><input type="number" min="0" step="any" data-pk="rpm" placeholder="2600"></div>
+        <div><label><span data-i18n="minRPM"></span> (RPM)</label><input type="number" min="0" step="any" data-pk="minRpm" placeholder="800"></div>
+        <div><label><span data-i18n="finalRatio"></span></label><input type="number" min="0" step="any" data-pk="final" placeholder="4.47"></div>
+        <div><label><span data-i18n="wheelRadius"></span></label><input type="number" min="0" step="any" data-pk="radius" placeholder="0.312"></div>
+        <div><label><span data-i18n="vehMass"></span></label><input type="number" min="0" step="any" data-pk="mass" placeholder="55150"></div>
+      </div>
+      <label><span data-i18n="gearRatios"></span></label>
+      <input data-pk="gears" placeholder="9.008, 4.504, 3.3565, 2.209, 1.866, 1.523, 1.263, 1.003">
+      <label data-i18n="coefficients"></label>
+      <div class="grid3" style="max-width:420px">
+        <div><input type="number" step="any" data-pk="a" placeholder="a = -2"></div>
+        <div><input type="number" step="any" data-pk="b" placeholder="b = 3"></div>
+        <div><input type="number" step="any" data-pk="c" placeholder="c = 0"></div>
+      </div>
+    </div>`;
+  $("pInputs").innerHTML = [0,1].map(pfCard).join("");
+  const pCards = [0,1].map(i => document.querySelector(`#pInputs [data-v="${i}"]`));
+  const pfField = (i, k) => pCards[i].querySelector(`[data-pk="${k}"]`);
+  const readPerf = i => Object.fromEntries(PFK.map(k => [k, pfField(i,k).value]));
+  let pfStat = [0,1].map(() => ({fn: () => tr("pHint"), cls: ""}));
+  function renderPfStat(i) { const s = pCards[i].querySelector(".pStatus"); s.textContent = pfStat[i].fn(); s.className = "config-status pStatus " + pfStat[i].cls; }
+  function perfLang() { pCards.forEach((c,i) => { c.querySelector(".pText").placeholder = tr("pPlaceholder"); renderPfStat(i); }); }
+
+  // Vehicle file: top-level "model", VehiclePhys.engine, VehiclePhys.mechanics
+  function parseVehicleConfig(source) {
+    let json = null;
+    try { json = JSON.parse(source); } catch (_) {}
+    if (json !== null) return parseVehicleJson(json);
+    const e = parseBlkConfig(source);
+    const mech = blkBlock(source, "mechanics") ?? "";
+    const gb = blkBlock(mech, "gearRatios") ?? "";
+    const ratios = [...gb.matchAll(/ratio\s*:\s*r\s*=\s*"?(-?\d*\.?\d+(?:[eE][-+]?\d+)?)/g)].map(m => +m[1]).filter(v => v > 0);
+    const main = blkNum(mech, "mainGearRatio"), side = blkNum(mech, "sideGearRatio") || "1";
+    const vm = /^model\s*:\s*t\s*=\s*"([^"]*)"/m.exec(source);
+    return {
+      vname: vm ? vm[1] : "", ename: e.name, power: e.power, rpm: e.rpm, minRpm: e.minRpm, a: e.a, b: e.b, c: e.c,
+      gears: ratios.join(", "), final: main === "" ? "" : fmtNum(+main * +side), radius: blkNum(mech, "driveGearRadius"),
+      mass: blkNum(blkBlock(source, "Mass") ?? "", "TakeOff") || blkNum(blkBlock(source, "Mass") ?? "", "Empty") || blkNum(source, "mass")
+    };
+  }
+  function parseVehicleJson(d) {
+    const find = (n, k) => {
+      if (!n || typeof n !== "object") return null;
+      if (!Array.isArray(n) && n[k] && typeof n[k] === "object") return n[k];
+      for (const v of Object.values(n)) { const f = find(v, k); if (f) return f; }
+      return null;
+    };
+    const e = parseJsonConfig(d), m = find(d, "mechanics") || {};
+    let g = m.gearRatios;
+    g = Array.isArray(g) ? g : (g && g.ratio !== undefined ? [].concat(g.ratio) : []);
+    const side = m.sideGearRatio === undefined ? 1 : Number(m.sideGearRatio);
+    return {
+      vname: asText(d.model), ename: e.name, power: e.power, rpm: e.rpm, minRpm: e.minRpm, a: e.a, b: e.b, c: e.c,
+      gears: g.map(Number).filter(v => v > 0).join(", "),
+      final: m.mainGearRatio === undefined ? "" : fmtNum(Number(m.mainGearRatio) * side), radius: asText(m.driveGearRadius),
+      mass: asText((find(d, "Mass") || {}).TakeOff ?? (find(d, "Mass") || {}).Empty ?? d.mass)
+    };
+  }
+
+  pCards.forEach((card, i) => {
+    const pText = card.querySelector(".pText");
+    pText.addEventListener("input", () => {
+      if (!pText.value.trim()) { pfStat[i] = {fn: () => tr("pHint"), cls: ""}; renderPfStat(i); return; }
+      try {
+        const p = parseVehicleConfig(pText.value);
+        PFK.forEach(k => { pfField(i,k).value = p[k] ?? ""; });
+        const missing = [];
+        if (p.power === "") missing.push(tr("missingPower"));
+        if (p.rpm === "") missing.push(tr("missingRPM"));
+        if (p.minRpm === "") missing.push(tr("missingMin"));
+        if (p.gears === "") missing.push(tr("missingGears"));
+        if (p.final === "") missing.push(tr("missingFinal"));
+        if (p.radius === "") missing.push(tr("missingRadius"));
+        if (p.mass === "") missing.push(tr("missingMass"));
+        const noFormula = p.a === "" && p.b === "" && p.c === "";
+        const label = p.vname || p.ename;
+        pfStat[i] = missing.length
+          ? {fn: () => `${tr("statusLoaded")}${missing.join(", ")}`, cls: "bad"}
+          : {fn: () => `${tr("statusSuccess")}${label}${noFormula ? tr("statusDefault") : ""}`, cls: "ok"};
+        renderPfStat(i);
+        updatePerf();
+      } catch (err) {
+        pfStat[i] = {fn: () => `${tr("statusError")}${err.message}`, cls: "bad"}; renderPfStat(i);
+      }
+    });
+    card.querySelector(".pClear").addEventListener("click", () => {
+      pText.value = ""; PFK.forEach(k => pfField(i,k).value = "");
+      pfStat[i] = {fn: () => tr("statusCleared"), cls: ""}; renderPfStat(i); updatePerf();
+    });
+    card.querySelectorAll("[data-pk]").forEach(el => el.addEventListener("input", updatePerf));
+  });
+  showCurves.addEventListener("change", updatePerf);
+  showLines.addEventListener("change", updatePerf);
+  showPCurve.addEventListener("change", updatePerf);
+  showDrag.addEventListener("change", updatePerf);
+  showOverlay.addEventListener("change", updatePerf);
+
+  function calcPerf(i) {
+    const r = readPerf(i);
+    if (["power","rpm","minRpm","gears","final","radius","a","b","c"].every(k => r[k].trim() === "")) return null;
+    const power = Number(r.power), rpm = Number(r.rpm), minRpm = Number(r.minRpm);
+    if (r.power === "" || r.rpm === "" || r.minRpm === "" || !(power > 0 && rpm > 0 && minRpm >= 0 && minRpm < rpm)) return {error: tr("pErrEngine")};
+    const blank = ["a","b","c"].filter(k => r[k] === "").length;
+    if (blank === 1 || blank === 2) return {error: tr("pErrCoef")};
+    const usedDefault = blank === 3;
+    const co = usedDefault ? DEFAULT_CURVE : {a:Number(r.a), b:Number(r.b), c:Number(r.c)};
+    if (![co.a,co.b,co.c].every(Number.isFinite)) return {error: tr("pErrCoef")};
+    const gears = r.gears.split(/[\s,;、，]+/).filter(Boolean).map(Number);
+    if (!gears.length || !gears.every(g => Number.isFinite(g) && g > 0)) return {error: tr("pErrGears")};
+    const fin = Number(r.final), rad = Number(r.radius);
+    if (!(r.final !== "" && fin > 0)) return {error: tr("pErrFinal")};
+    if (!(r.radius !== "" && rad > 0)) return {error: tr("pErrRadius")};
+    const mass = r.mass.trim() === "" ? null : Number(r.mass);
+    if (mass !== null && !(mass > 0)) return {error: tr("pErrMass")};
+
+    const xmin = minRpm/rpm;
+    const fc = x => { const t = Math.max(x, xmin); return Math.max(0, co.a*t*t + co.b*t + co.c); };
+    let factor = 0;
+    for (let k=0; k<=4000; k++) { const x = k/4000; factor = Math.max(factor, x*fc(x)); }
+    if (!(factor > 0)) return {error: tr("pErrFactor")};
+    const base = power*UNIT_W[powerUnit.value] / (RAD*rpm*factor);   // N·m
+
+    const gs = gears.map((g, gi) => {
+      const tot = g*fin, k = RAD*rad/tot*3.6;                          // k: km/h per RPM
+      const data = [], N = 120;
+      for (let j=0; j<=N; j++) {
+        const n = minRpm + (rpm-minRpm)*j/N;
+        data.push({rpm:n, v:k*n, f:base*fc(n/rpm)*tot/rad/1000});      // kN
+      }
+      const pk = data.reduce((b,p) => p.f > b.f ? p : b, data[0]);
+      return {n:gi+1, g, tot, k, data, pk, vmax:k*rpm};
+    });
+    const drag = mass ? SLOPES.map(sl => { const th = Math.atan(sl/100); return {s: sl, f: mass*G*(Math.sin(th) + ROAD_CRR*Math.cos(th))/1000}; }) : null;
+    gs.forEach(g => {   // slope where resistance equals peak traction: sinθ + Crr·cosθ = F/(m·g)
+      g.climb = mass ? Math.asin(Math.min(1, g.pk.f*1000/(mass*G)/Math.hypot(1, ROAD_CRR))) - Math.atan(ROAD_CRR) : null;
+    });
+    return {vname:r.vname.trim(), ename:r.ename.trim(), gs, rpm, minRpm, usedDefault, pW: power*UNIT_W[powerUnit.value], mass, drag};
+  }
+
+  // ax: shared axis tops {v, r, f} (theoretical max x 1.1); nc: gear count used for the colour palette
+  function drawPerf(cv, list, ax, nc) {
+    const c = cv.getContext("2d"), rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if (rect.width < 10) return;
+    cv.width = Math.round(rect.width*dpr); cv.height = Math.round(rect.height*dpr);
+    c.setTransform(dpr,0,0,dpr,0,0);
+    const w = rect.width, h = rect.height;
+    c.clearRect(0,0,w,h);
+    if (!list.length || !ax) return;
+    const left=62, right=68, top=22, bottom=50, pw=w-left-right, ph=h-top-bottom;
+    const vS = niceStep(ax.v, 8), rS = niceStep(ax.r, 12), fS = niceStep(ax.f, 12);
+    const vMax = Math.max(vS, Math.ceil(ax.v/vS - 1e-9)*vS), rMax = Math.max(rS, Math.ceil(ax.r/rS - 1e-9)*rS), fMax = Math.max(fS, Math.ceil(ax.f/fS - 1e-9)*fS);
+    const X = v => left + v/vMax*pw, YF = f => top+ph - f/fMax*ph, YR = r => top+ph - r/rMax*ph;
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed", txt = dark ? "#f3f4f6" : "#17202a";
+
+    c.lineWidth = 1; c.font = "12px system-ui,sans-serif";
+    for (let i=0; i*fS <= fMax + fS*1e-6; i++) {                       // left axis: traction (with grid)
+      const f = i*fS, y = YF(f);
+      c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
+      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText(f.toFixed(decOf(fS)), left-8, y);
+    }
+    for (let i=0; i*rS <= rMax + rS*1e-6; i++) {                       // right axis: RPM
+      const r = i*rS, y = YR(r);
+      c.strokeStyle = axis; c.beginPath(); c.moveTo(left+pw,y); c.lineTo(left+pw+4,y); c.stroke();
+      c.fillStyle = axis; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(r.toFixed(decOf(rS)), left+pw+8, y);
+    }
+    for (let i=0; i*vS <= vMax + vS*1e-6; i++) {                       // x axis: speed
+      const v = i*vS, x = X(v);
+      c.strokeStyle = grid; c.beginPath(); c.moveTo(x,top); c.lineTo(x,top+ph); c.stroke();
+      c.fillStyle = axis; c.textAlign = "center"; c.textBaseline = "top"; c.fillText(v.toFixed(decOf(vS)), x, top+ph+8);
+    }
+    c.strokeStyle = axis; c.strokeRect(left, top, pw, ph);
+    c.fillStyle = txt; c.font = "13px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "alphabetic";
+    c.fillText(tr("pAxisX"), left+pw/2, h-8);
+    c.save(); c.translate(15, top+ph/2); c.rotate(-Math.PI/2); c.fillText(tr("pAxisF"), 0, 0); c.restore();
+    c.save(); c.translate(w-13, top+ph/2); c.rotate(Math.PI/2); c.fillText(tr("pAxisR"), 0, 0); c.restore();
+
+    c.save(); c.beginPath(); c.rect(left, top, pw, ph); c.clip();
+    list.forEach(res => {
+    if (showDrag.checked && res.drag) {                                 // resistance lines by slope (all grey)
+      c.strokeStyle = "#8a8f98"; c.fillStyle = "#8a8f98"; c.lineWidth = 1.2;
+      c.font = "11px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom";
+      res.drag.forEach(d => {
+        if (d.f > fMax) return;
+        const y = YF(d.f);
+        c.beginPath(); c.moveTo(left, y); c.lineTo(left+pw, y); c.stroke();
+        c.fillText(d.s + "%", left+pw-3, y-2);
+      });
+    }
+    res.gs.forEach((g, i) => {
+      const col = gearColor(i, nc);
+      if (showLines.checked) {                                          // gear lines: 0 RPM up to the axis edge (dashed)
+        const er = Math.min(rMax, vMax/g.k), ex = X(g.k*er), ey = YR(er);
+        c.strokeStyle = col; c.lineWidth = 2; c.setLineDash([8,5]);
+        c.beginPath(); c.moveTo(X(0), YR(0)); c.lineTo(ex, ey); c.stroke(); c.setLineDash([]);
+        c.fillStyle = col; c.font = "bold 12px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+        c.fillText(g.n, Math.min(left+pw-8, Math.max(left+8, ex-8)), Math.max(top+10, ey-10));
+      }
+      if (showCurves.checked) {                                         // traction curves (solid) + peak dot
+        c.strokeStyle = col; c.lineWidth = 2.5; c.beginPath();
+        g.data.forEach((p, j) => { const x = X(p.v), y = YF(p.f); j ? c.lineTo(x,y) : c.moveTo(x,y); });
+        c.stroke();
+        c.fillStyle = col; c.beginPath(); c.arc(X(g.pk.v), YF(g.pk.f), 4.5, 0, Math.PI*2); c.fill();
+      }
+    });
+    if (showPCurve.checked) {                                           // constant-power curve: F = P / v
+      const vLow = Math.max(3.6*res.pW/(1000*fMax), vMax*0.002);
+      if (vLow < vMax) {
+        c.strokeStyle = txt; c.lineWidth = 1.5; c.beginPath();
+        for (let k=0; k<=240; k++) {
+          const v = vLow*Math.pow(vMax/vLow, k/240), x = X(v), y = YF(3.6*res.pW/(1000*v));
+          k ? c.lineTo(x,y) : c.moveTo(x,y);
+        }
+        c.stroke();
+      }
+    }
+    });
+    c.restore();
+  }
+
+  function updatePerf() {
+    document.querySelectorAll(".pUnit").forEach(e => { e.textContent = powerUnit.value.toUpperCase(); });
+    const res = [0,1].map(calcPerf);
+    $("pError").textContent = res.map((r,i) => r && r.error ? `${tr("pVehicle")} ${i+1}: ${r.error}` : "").filter(Boolean).join(" ");
+    const ok = res.map(r => r && !r.error ? r : null), valid = ok.filter(Boolean);
+    const overlay = showOverlay.checked && valid.length > 1;
+    $("pCharts").classList.toggle("two", valid.length > 1 && !overlay);
+    $("pCharts").classList.toggle("overlay", overlay);
+    [0,1].forEach(i => { $("pPanel"+i).hidden = !ok[i]; });
+    // Shared axes so that the two charts are directly comparable
+    const nc = Math.max(0, ...valid.map(r => r.gs.length));
+    const ax = valid.length ? {
+      v: Math.max(...valid.flatMap(r => r.gs.map(g => g.vmax)))*1.1,
+      r: Math.max(...valid.map(r => r.rpm))*1.1,
+      f: Math.max(...valid.flatMap(r => r.gs.map(g => g.pk.f)))*1.1
+    } : null;
+    [0,1].forEach(i => {
+      const r = ok[i];
+      $("pHead"+i).innerHTML = r
+        ? `<div class="vn">${esc(r.vname || r.ename || `${tr("pVehicle")} ${i+1}`)}</div>${r.vname && r.ename ? `<div class="muted">${tr("engine")}: ${esc(r.ename)}${r.usedDefault ? ` ${tr("statusDefault")}` : ""}</div>` : ""}`
+        : "";
+      drawPerf($("pChart"+i), overlay ? (i === 0 ? valid : []) : (r ? [r] : []), ax, nc);
+      $("pLegend"+i).innerHTML = r ? r.gs.map((g,gi) =>
+        `<span style="color:${gearColor(gi,nc)}"><i class="line-key"></i><i class="line-key dashed"></i>${gearName(g.n)} (${fmtNum(g.g)})</span>`).join("") + (showPCurve.checked ? `<span style="color:var(--text)"><i class="line-key"></i>${tr("pCurveName")}</span>` : "") + (showDrag.checked && r.drag ? `<span style="color:#8a8f98"><i class="line-key"></i>${tr("pDragName")}</span>` : "") : "";
+      $("pResults"+i).innerHTML = r ? r.gs.map((g,gi) => `
+        <div class="result">
+          <strong><i class="swatch" style="background:${gearColor(gi,nc)}"></i>${gearName(g.n)}</strong>
+          <small>${tr("pTotal")} ${g.tot.toFixed(3)} (${fmtNum(g.g)} × ${fmtNum(g.tot/g.g)})</small>
+          <small>${tr("pVmax")} ${g.vmax.toFixed(1)} km/h (${Math.round(r.rpm)} RPM)</small>
+          <small>${tr("pFmax")} ${g.pk.f.toFixed(1)} kN (${Math.round(g.pk.rpm)} RPM / ${g.pk.v.toFixed(1)} km/h)</small>
+          ${g.climb != null ? `<small>${tr("pClimb")} ${g.climb < 0 ? tr("pNoClimb") : `${(Math.tan(g.climb)*100).toFixed(1)}% (${(g.climb*180/Math.PI).toFixed(1)}°)`}</small>` : ""}
+        </div>`).join("") : "";
+    });
+  }
+
+  // ---- Tabs ----
+  document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+    ["torque","perf"].forEach(t => { $("tab-"+t).hidden = t !== btn.dataset.tab; });
+    btn.dataset.tab === "perf" ? updatePerf() : update();
+  }));
+
+  $("language").addEventListener("change", e => { language = e.target.value; applyLanguage(); });
+  powerUnit.addEventListener("change", () => { renderInputs(readInputs()); update(); updatePerf(); });
   showTorque.addEventListener("change", update);
   showPower.addEventListener("change", update);
   absAxis.addEventListener("change", update);
-  document.getElementById("reset").addEventListener("click", () => { renderInputs(defaults); update(); });
-  window.addEventListener("resize", update);
+  $("reset").addEventListener("click", () => { renderInputs(defaults); update(); });
+  window.addEventListener("resize", () => { update(); updatePerf(); });
   renderInputs(defaults);
   applyLanguage();
 })();
