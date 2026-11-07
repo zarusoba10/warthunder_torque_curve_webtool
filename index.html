@@ -87,6 +87,7 @@
     <div class="chart-options">
       <label><input type="checkbox" id="showTorque" checked> <span data-i18n="torqueLine"></span></label>
       <label><input type="checkbox" id="showPower" checked> <span data-i18n="powerLine"></span></label>
+      <label><input type="checkbox" id="absAxis"> <span data-i18n="absAxis"></span></label>
     </div>
     <div class="chart-wrap"><canvas id="chart"></canvas></div>
     <div class="legend" id="legend"></div>
@@ -115,13 +116,13 @@
       title:"エンジントルク曲線比較ツール",
       lead:"最大3種類のエンジンについて、出力・最低/最大回転数・torqFormulaからトルク曲線を計算して重ねて比較します。",
       powerUnit:"出力単位", reset:"入力をリセット", chartTitle:"トルク曲線",
-      chartDescription:"横軸：アイドリング回転数（0%）から最大回転数（100%）までの割合／縦軸：トルク（kN·m）",
-      torqueLine:"トルク曲線（実線）", powerLine:"出力曲線（破線）",
+      chartDescription:"横軸：相対表示はアイドリング（0%）〜最大回転数（100%）、絶対表示はRPM／縦軸：トルク（kN·m）",
+      absAxis:"横軸を絶対RPMで表示", torqueLine:"トルク曲線（実線）", powerLine:"出力曲線（破線）",
       modelSummary:"計算モデルと前提",
       modelP1:'<code>f(x) = ax² + bx + c</code>、ここで <code>x = RPM ÷ maxRPM</code>（0～1）です。最低回転数以下では <code>x = minRPM ÷ maxRPM</code> のトルクで一定とします。',
       modelP2:'トルクを <code>T(x) = Tbase × f(max(x, xmin))</code> と仮定し、指定された最大出力と一致するように基準トルクを逆算します。',
       modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(max(x, xmin))))</code>',
-      modelP4:"出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。負のトルクは0にクリップします。torqFormulaが未定義の場合は、ゲーム内グラフから推定した共通曲線 <code>a=-2, b=3, c=0</code> を使用します。",
+      modelP4:"出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。負のトルクは0にクリップします。torqFormulaが未定義の場合は共通曲線 <code>a=-2, b=3, c=0</code> を使用します。この曲線は、DEVlogに掲載されていた画像から推定した値です。",
       modelP5:"<strong>注意：</strong>torqFormulaを二次関数とみなした推定モデルです。ゲーム内部の実装との一致は未確認です。入力する最大出力はエンジン単体の値にしてください。",
       engine:"エンジン", configLabel:"設定ファイルのテキストを貼り付け",
       clear:"パラメータテキスト削除", pastePlaceholder:"設定ファイル全文、または engine { ... } ブロックを貼り付け（JSON / BLK形式）",
@@ -136,7 +137,7 @@
       errorIncomplete:"エンジン{n}：最大出力・最大回転数・最低回転数を入力してください（最低回転数は最大回転数未満）。",
       errorCoef:"エンジン{n}：係数 a, b, c は3つとも入力するか、3つとも空欄にしてください。",
       errorFactor:"エンジン{n}：出力が正になりません。係数を確認してください。",
-      torqueAxis:"アイドリング〜最大回転数（0% = アイドリング）", torqueUnit:"トルク (kN·m)", powerAxis:"出力",
+      torqueAxis:"アイドリング〜最大回転数（0% = アイドリング）", torqueAxisAbs:"エンジン回転数 (RPM)", torqueUnit:"トルク (kN·m)", powerAxis:"出力",
       legend:"実線: トルク / 破線: 出力", baseTorque:"推定基準トルク：",
       peakTorque:"最大トルク：", maxPowerRPM:"最大出力の回転数：", minTorque:"最低回転数でのトルク：", usingDefault:"共通曲線を使用中"
     },
@@ -144,13 +145,13 @@
       title:"Engine Torque Curve Comparator",
       lead:"Calculate and compare torque curves for up to three engines using power, minimum/maximum RPM, and torqFormula coefficients.",
       powerUnit:"Power unit", reset:"Reset inputs", chartTitle:"Torque curves",
-      chartDescription:"X-axis: engine speed from idle (0%) to max RPM (100%) / Y-axis: torque (kN·m)",
-      torqueLine:"Torque curve (solid)", powerLine:"Power curve (dashed)",
+      chartDescription:"X-axis: relative = idle (0%) to max RPM (100%), absolute = RPM / Y-axis: torque (kN·m)",
+      absAxis:"Show X-axis as absolute RPM", torqueLine:"Torque curve (solid)", powerLine:"Power curve (dashed)",
       modelSummary:"Calculation model and assumptions",
       modelP1:'<code>f(x) = ax² + bx + c</code>, where <code>x = RPM ÷ maxRPM</code> (0–1). Below the minimum RPM, torque is held at the value for <code>x = minRPM ÷ maxRPM</code>.',
       modelP2:'Torque is assumed to be <code>T(x) = Tbase × f(max(x, xmin))</code>. The base torque is solved so that the specified maximum power is matched.',
       modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(max(x, xmin))))</code>',
-      modelP4:"Power is calculated in W, speed in RPM, torque in N·m; torque is displayed in kN·m. Negative torque is clipped to zero. If torqFormula is undefined, the common curve <code>a=-2, b=3, c=0</code>, estimated from the in-game graph, is used.",
+      modelP4:"Power is calculated in W, speed in RPM, torque in N·m; torque is displayed in kN·m. Negative torque is clipped to zero. If torqFormula is undefined, the common curve <code>a=-2, b=3, c=0</code> is used. This curve was estimated from an image published in the DEVlog.",
       modelP5:"<strong>Note:</strong> This is an estimated model treating torqFormula as a quadratic. It has not been confirmed to match the game's internal implementation. Enter the maximum power of the engine itself.",
       engine:"Engine", configLabel:"Paste configuration text",
       clear:"Clear parameter text", pastePlaceholder:"Paste the full config file or the engine { ... } block (JSON / BLK format)",
@@ -165,7 +166,7 @@
       errorIncomplete:"Engine {n}: Enter maximum output, maximum RPM and minimum RPM (minimum must be below maximum).",
       errorCoef:"Engine {n}: Enter all of a, b, c, or leave all three blank.",
       errorFactor:"Engine {n}: Power is not positive. Check the coefficients.",
-      torqueAxis:"Idle to max RPM (0% = idle)", torqueUnit:"Torque (kN·m)", powerAxis:"Power",
+      torqueAxis:"Idle to max RPM (0% = idle)", torqueAxisAbs:"Engine speed (RPM)", torqueUnit:"Torque (kN·m)", powerAxis:"Power",
       legend:"Solid: torque / Dashed: power", baseTorque:"Estimated base torque:",
       peakTorque:"Peak torque:", maxPowerRPM:"Maximum power at", minTorque:"Torque at min RPM:", usingDefault:"Using common curve"
     }
@@ -179,6 +180,7 @@
   const ctx = canvas.getContext("2d");
   const showTorque = document.getElementById("showTorque");
   const showPower = document.getElementById("showPower");
+  const absAxis = document.getElementById("absAxis");
 
   function applyLanguage() {
     document.documentElement.lang = language;
@@ -203,12 +205,12 @@
         </div>
         <label>${tr("engineName")}</label>
         <input data-k="name" value="${esc(e.name)}" placeholder="${tr("exampleName")}">
+        <label>${tr("maxOutput")} (${u})</label>
+        <input type="number" min="0" step="any" data-k="power" value="${esc(e.power)}" placeholder="1500">
         <div class="grid2">
-          <div><label>${tr("maxOutput")} (${u})</label><input type="number" min="0" step="any" data-k="power" value="${esc(e.power)}" placeholder="1500"></div>
           <div><label>${tr("maxRPM")} (RPM)</label><input type="number" min="0" step="any" data-k="rpm" value="${esc(e.rpm)}" placeholder="3000"></div>
+          <div><label>${tr("minRPM")} (RPM)</label><input type="number" min="0" step="any" data-k="minRpm" value="${esc(e.minRpm)}" placeholder="700"></div>
         </div>
-        <label>${tr("minRPM")} (RPM)</label>
-        <input type="number" min="0" step="any" data-k="minRpm" value="${esc(e.minRpm)}" placeholder="700">
         <label>${tr("coefficients")}</label>
         <div class="grid3">
           <div><label>a</label><input type="number" step="any" data-k="a" value="${esc(e.a)}" placeholder="${DEFAULT_CURVE.a}"></div>
@@ -301,7 +303,7 @@
     const tf = blkBlock(eng, "torqFormula") ?? "";
     const stripped = tf ? eng.replace(tf, "") : eng;
     return {
-      name: makeName(blkStr(stripped, "manufacturer"), blkStr(stripped, "model"), ""),
+      name: makeName(blkStr(stripped, "manufacturer"), blkStr(stripped, "model"), blkStr(source.replace(eng, ""), "model")),
       power: blkNum(stripped, "horsePowers"), rpm: blkNum(stripped, "maxRPM"), minRpm: blkNum(stripped, "minRPM"),
       a: blkNum(tf, "a"), b: blkNum(tf, "b"), c: blkNum(tf, "c")
     };
@@ -384,18 +386,28 @@
     for (let y=0; y<=pMax+pStep*1e-8; y+=pStep) {
       ctx.fillStyle = axis; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(pStep)), w-right+10, YP(y));
     }
-    for (let k=0; k<=10; k++) {
-      const xx = X(k/10);
+    // X axis. Relative: each engine spans idle(0%)..max(100%). Absolute: shared RPM scale from the lowest idle to the highest max RPM.
+    const absMode = absAxis.checked;
+    const lo = valid.length ? Math.min(...valid.map(s => s.minRpm)) : 0;
+    const hi = valid.length ? Math.max(...valid.map(s => s.rpm)) : 1;
+    const dx = (s, x) => absMode ? (x*s.rpm - lo)/(hi - lo) : (x - s.xmin)/(1 - s.xmin);
+    let ticks;
+    if (absMode) {
+      const st = niceStep(hi - lo);
+      ticks = [];
+      for (let v = Math.ceil(lo/st - 1e-9)*st; v <= hi + st*1e-9; v += st) ticks.push({pos:(v-lo)/(hi-lo), label:String(Math.round(v*100)/100)});
+    } else ticks = Array.from({length:11}, (_,k) => ({pos:k/10, label:`${k*10}%`}));
+    ticks.forEach(t => {
+      const xx = X(t.pos);
       ctx.strokeStyle = dark ? "#273244" : "#edf0f4"; ctx.beginPath(); ctx.moveTo(xx,top); ctx.lineTo(xx,top+ph); ctx.stroke();
-      ctx.fillStyle = axis; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(`${k*10}%`, xx, top+ph+9);
-    }
+      ctx.fillStyle = axis; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(t.label, xx, top+ph+9);
+    });
     ctx.fillStyle = dark ? "#f3f4f6" : "#17202a"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.font = "13px system-ui,sans-serif";
-    ctx.fillText(tr("torqueAxis"), left+pw/2, h-7);
+    ctx.fillText(tr(absMode ? "torqueAxisAbs" : "torqueAxis"), left+pw/2, h-7);
     ctx.save(); ctx.translate(17, top+ph/2); ctx.rotate(-Math.PI/2); ctx.fillText(tr("torqueUnit"), 0, 0); ctx.restore();
     ctx.save(); ctx.translate(w-15, top+ph/2); ctx.rotate(Math.PI/2); ctx.fillText(`${tr("powerAxis")} (${powerUnit.value.toUpperCase()})`, 0, 0); ctx.restore();
 
-    // Display only: map x (= RPM/maxRPM) to idle..max (0..1); points below idle are not drawn.
-    const dx = (s, x) => (x - s.xmin) / (1 - s.xmin);
+    // Points below idle RPM are not drawn; each line ends at its own max RPM.
     const line = (s, getY, dash) => {
       ctx.strokeStyle = colors[s.index]; ctx.lineWidth = 2.5; ctx.setLineDash(dash); ctx.beginPath();
       s.data.filter(p => p.x >= s.xmin - 1e-9).forEach((p,j) => { const x = X(dx(s,p.x)), y = getY(p); j ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
@@ -434,6 +446,7 @@
   powerUnit.addEventListener("change", () => { renderInputs(readInputs()); update(); });
   showTorque.addEventListener("change", update);
   showPower.addEventListener("change", update);
+  absAxis.addEventListener("change", update);
   document.getElementById("reset").addEventListener("click", () => { renderInputs(defaults); update(); });
   window.addEventListener("resize", update);
   renderInputs(defaults);
