@@ -74,6 +74,14 @@
   .phead { text-align:center; margin:10px 0 6px; }
   .phead .vn { font-size:1.25rem; font-weight:700; }
   @media(max-width:600px) { body { padding:14px; } .chart-wrap { height:340px; } }
+
+  .acharts { display:grid; grid-template-columns:1fr; max-width:600px; margin:0 auto; gap:18px; }
+  .acharts.two { grid-template-columns:1fr 1fr; max-width:none; }
+  .acol { min-width:0; }
+  .chart-wrap.acc { height:auto; aspect-ratio:1.1/1; margin-bottom:12px; }
+  .chart-wrap.acc canvas { position:absolute; inset:0; }
+  .acharts.overlay #aCol1 .chart-wrap { display:none; }
+  @media(max-width:760px) { .acharts.two { grid-template-columns:1fr; max-width:600px; } }
 </style>
 </head>
 <body>
@@ -97,6 +105,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" role="tab" data-tab="torque" data-i18n="tabTorque"></button>
     <button class="tab" role="tab" data-tab="perf" data-i18n="tabPerf"></button>
+    <button class="tab" role="tab" data-tab="acc" data-i18n="tabAcc"></button>
   </nav>
 
   <!-- ===== Tab 1: Torque curves ===== -->
@@ -140,8 +149,8 @@
     <h1 data-i18n="pTitle"></h1>
     <p class="lead" data-i18n="pLead"></p>
 
-    <div class="pinputs" id="pInputs"></div>
-    <p class="error" id="pError" role="status"></p>
+    <div id="pSlot"><div id="pHost"><div class="pinputs" id="pInputs"></div>
+    <p class="error" id="pError" role="status"></p></div></div>
 
     <section class="chart-card">
       <div class="chart-options" style="justify-content:center">
@@ -176,6 +185,43 @@
       <p data-i18n="pM5"></p>
       <p data-i18n="modelP6"></p>
       <p data-i18n="pM7"></p>
+    </details>
+  </section>
+
+  <!-- ===== Tab 3: Acceleration curves ===== -->
+  <section id="tab-acc" hidden>
+    <h1 data-i18n="aTitle"></h1>
+    <p class="lead" data-i18n="aLead"></p>
+    <div id="aSlot"></div>
+    <p class="error" id="aError" role="status"></p>
+    <section class="chart-card">
+      <div class="chart-options" style="justify-content:center">
+        <label><span data-i18n="accSlope"></span>
+          <select id="accSlope" style="width:auto"><option value="0">0%</option><option value="2">2%</option><option value="5">5%</option><option value="7">7%</option><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option></select></label>
+        <label><input type="checkbox" id="aOverlay"> <span data-i18n="aOverlay"></span></label>
+        <label><span data-i18n="aCrr"></span> <input type="number" id="accCrr" value="0.05" min="0" step="any" style="width:80px"></label>
+        <label><span data-i18n="aLag"></span> <input type="number" id="accLag" value="0.3" min="0" step="any" style="width:80px"></label>
+      </div>
+      <div class="acharts" id="aCharts">
+        <div class="acol" id="aCol0" hidden>
+          <div class="phead" id="aHead0"></div>
+          <div class="chart-wrap acc"><canvas id="aV0"></canvas></div>
+          <div class="chart-wrap acc"><canvas id="aD0"></canvas></div>
+          <div class="legend" id="aLeg0" style="justify-content:center"></div>
+          <div class="results" id="aRes0"></div>
+        </div>
+        <div class="acol" id="aCol1" hidden>
+          <div class="phead" id="aHead1"></div>
+          <div class="chart-wrap acc"><canvas id="aV1"></canvas></div>
+          <div class="chart-wrap acc"><canvas id="aD1"></canvas></div>
+          <div class="legend" id="aLeg1" style="justify-content:center"></div>
+          <div class="results" id="aRes1"></div>
+        </div>
+      </div>
+    </section>
+    <details open>
+      <summary data-i18n="aModelSummary"></summary>
+      <p data-i18n="aM1"></p><p data-i18n="aM2"></p><p data-i18n="aM3"></p>
     </details>
   </section>
 </main>
@@ -580,7 +626,7 @@
   // =====================================================================
   // Performance tab: speed vs. traction force / engine RPM
   // =====================================================================
-  const PFK = ["vname","ename","power","rpm","minRpm","a","b","c","gears","final","radius","mass"];
+  const PFK = ["vname","ename","power","rpm","minRpm","a","b","c","gears","final","radius","mass","track"];
   const showCurves = $("showCurves"), showLines = $("showLines"), showPCurve = $("showPCurve"), showOverlay = $("showOverlay"), showDrag = $("showDrag");
   const G = 9.80665, ROAD_CRR = 0.05;
   const SLOPES = (() => { const a = [0,2,5,7]; for (let s=10;; s+=5) { a.push(s); if (Math.atan(s/100)*180/Math.PI > 30) break; } return a; })();
@@ -608,6 +654,7 @@
         <div><label><span data-i18n="finalRatio"></span></label><input type="number" min="0" step="any" data-pk="final" placeholder="4.47"></div>
         <div><label><span data-i18n="wheelRadius"></span></label><input type="number" min="0" step="any" data-pk="radius" placeholder="0.312"></div>
         <div><label><span data-i18n="vehMass"></span></label><input type="number" min="0" step="any" data-pk="mass" placeholder="55150"></div>
+        <div><label><span data-i18n="trackMass"></span></label><input type="number" min="0" step="any" data-pk="track" placeholder="3000"></div>
       </div>
       <label><span data-i18n="gearRatios"></span></label>
       <input data-pk="gears" placeholder="9.008, 4.504, 3.3565, 2.209, 1.866, 1.523, 1.263, 1.003">
@@ -640,7 +687,7 @@
     return {
       vname: vm ? vm[1] : "", ename: e.name, power: e.power, rpm: e.rpm, minRpm: e.minRpm, a: e.a, b: e.b, c: e.c,
       gears: ratios.join(", "), final: main === "" ? "" : fmtNum(+main * +side), radius: blkNum(mech, "driveGearRadius"),
-      mass: blkNum(blkBlock(source, "Mass") ?? "", "TakeOff") || blkNum(blkBlock(source, "Mass") ?? "", "Empty") || blkNum(source, "mass")
+      mass: bodyMass(blkBlock(source, "Mass") ?? "") || blkNum(source, "mass"), track: blkNum(blkBlock(source, "Mass") ?? "", "trackMass")
     };
   }
   function parseVehicleJson(d) {
@@ -658,7 +705,7 @@
       vname: asText(d.model), ename: e.name, power: e.power, rpm: e.rpm, minRpm: e.minRpm, a: e.a, b: e.b, c: e.c,
       gears: g.map(Number).filter(v => v > 0).join(", "),
       final: m.mainGearRatio === undefined ? "" : fmtNum(Number(m.mainGearRatio) * side), radius: asText(m.driveGearRadius),
-      mass: asText((find(d, "Mass") || {}).TakeOff ?? (find(d, "Mass") || {}).Empty ?? d.mass)
+      mass: (() => { const M = find(d, "Mass") || {}; return M.Empty !== undefined ? fmtNum(Number(M.Empty) + Number(M.Fuel || 0)) : asText(M.TakeOff ?? d.mass); })(), track: asText((find(d, "Mass") || {}).trackMass)
     };
   }
 
@@ -739,7 +786,7 @@
     gs.forEach(g => {   // slope where resistance equals peak traction: sinθ + Crr·cosθ = F/(m·g)
       g.climb = mass ? Math.asin(Math.min(1, g.pk.f*1000/(mass*G)/Math.hypot(1, ROAD_CRR))) - Math.atan(ROAD_CRR) : null;
     });
-    return {vname:r.vname.trim(), ename:r.ename.trim(), gs, rpm, minRpm, usedDefault, pW: power*UNIT_W[powerUnit.value], mass, drag};
+    return {vname:r.vname.trim(), ename:r.ename.trim(), base, fc, rad, extraM: 2*(Number(r.track)||0), gs, rpm, minRpm, usedDefault, pW: power*UNIT_W[powerUnit.value], mass, drag};
   }
 
   // ax: shared axis tops {v, r, f} (theoretical max x 1.1); nc: gear count used for the colour palette
@@ -835,6 +882,7 @@
   }
 
   function updatePerf() {
+    updateAcc();
     document.querySelectorAll(".pUnit").forEach(e => { e.textContent = powerUnit.value.toUpperCase(); });
     const res = [0,1].map(calcPerf);
     $("pError").textContent = res.map((r,i) => r && r.error ? `${tr("pVehicle")} ${i+1}: ${r.error}` : "").filter(Boolean).join(" ");
@@ -914,11 +962,190 @@
   linkCross([makeCross(canvas, false)]);
   linkCross([makeCross($("pChart0"), true), makeCross($("pChart1"), true)]);
 
+  // =====================================================================
+  // Acceleration tab (shares the vehicle inputs with the performance tab)
+  // =====================================================================
+  Object.assign(translations.ja, {
+    tabAcc:"加速特性曲線", aTitle:"加速特性曲線",
+    aLead:"車両パラメータ（車両性能曲線タブと共通・同期）から、発進後の「経過時間–車速」と「経過時間–走行距離」を計算します。各ギアは最高回転数で自動変速（変速遅れなし）します。",
+    accSlope:"勾配", aOverlay:"2台を1つのグラフに重ねる（2台目は破線）",
+    aAxisT:"経過時間 (秒)", aAxisV:"車速 (km/h)", aAxisD:"走行距離 (m)", aShift:"変速点", aDashed:"（破線）",
+    aSumTop:"最高速度：", aSumTime:"最高速度到達時間：", aSum400:"400m到達時間：", aNo:"到達不可",
+    aErrMass:"重量（Mass.TakeOff）を入力してください。", tipTime:"経過時間",
+    aModelSummary:"計算モデルと前提",
+    aM1:"加速度 = (牽引力 − 抗力) ÷ 重量。回転部品の慣性（等価質量）・空気抵抗・変速時間は考慮しません。抗力 = 重量 × g × (sinθ + 0.05 × cosθ)。数値積分は0.01秒刻みです。",
+    aM2:"発進時は1速で、最低回転数以下でも最低回転数と同じトルク（基準トルク）が常に出るものとします。変速後の回転数が最低回転数を下回る場合も最低回転数として扱います。",
+    aM3:"最終ギアで最高回転数に達した時点を「最高速度到達」とし、以降は一定速度とみなして400m到達時間を求めます。発進できない勾配、または最高回転数に達する前に牽引力が抗力と釣り合う場合は「到達不可」（400mは釣り合い速度が正なら一定速度で算出）と表示します。"
+  });
+  Object.assign(translations.en, {
+    tabAcc:"Acceleration curves", aTitle:"Acceleration curves",
+    aLead:"Computes time–speed and time–distance from a standing start using the vehicle inputs shared with the performance tab. Each gear upshifts automatically at max RPM (no shift delay).",
+    accSlope:"Slope", aOverlay:"Overlay both vehicles (vehicle 2 dashed)",
+    aAxisT:"Elapsed time (s)", aAxisV:"Speed (km/h)", aAxisD:"Distance (m)", aShift:"Shift point", aDashed:" (dashed)",
+    aSumTop:"Top speed:", aSumTime:"Time to top speed:", aSum400:"Time to 400 m:", aNo:"not reachable",
+    aErrMass:"Enter the mass (Mass.TakeOff).", tipTime:"Time",
+    aModelSummary:"Model and assumptions",
+    aM1:"Acceleration = (traction − resistance) ÷ mass. Rotational inertia (equivalent mass), air resistance and shift time are ignored. Resistance = mass × g × (sinθ + 0.05 × cosθ). Integration step: 0.01 s.",
+    aM2:"The launch is in 1st gear, and the base torque is always available even below minimum RPM. If RPM after an upshift falls below the minimum, it is treated as the minimum RPM.",
+    aM3:"Reaching max RPM in the top gear counts as reaching top speed; speed is then constant and used to find the 400 m time. If the slope prevents launching, or traction balances resistance before max RPM, 'not reachable' is shown (400 m is still computed at the steady speed if it is positive)."
+  });
+  Object.assign(translations.ja, {
+    aCrr:"転がり抵抗係数", aLag:"変速遅れ (秒)", trackMass:"履帯重量 (kg)（慣性：等価重量に +2×）",
+    vehMass:"車体重量 (kg)（既定：Empty+Fuel）", missingMass:"Mass.Empty / Fuel",
+    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 2×履帯重量)。抗力 = 車体重量 × g × (sinθ + 転がり抵抗係数 × cosθ)。車体重量は Mass.Empty + Fuel です（TakeOffは挙動に影響しないため使いません）。履帯重量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。エンジン・駆動系の慣性、空気抵抗は考慮しません。数値積分は0.01秒刻みです。",
+    aM2:"発進は1速で、最低回転数以下でも基準トルクが常に出るものとします。変速時は「変速遅れ」の間だけ牽引力をゼロにします（実測では0〜0.5秒程度）。"
+  });
+  Object.assign(translations.en, {
+    aCrr:"Rolling resistance coeff.", aLag:"Shift delay (s)", trackMass:"Track mass (kg) (inertia: adds 2× to effective mass)",
+    vehMass:"Body mass (kg) (default: Empty+Fuel)", missingMass:"Mass.Empty / Fuel",
+    aM1:"Acceleration = (traction − resistance) ÷ (body mass + 2 × track mass). Resistance = body mass × g × (sinθ + Crr × cosθ). Body mass is Mass.Empty + Fuel (TakeOff has no effect in-game and is not used). Track mass does not affect climbing, so it acts only as inertia and is excluded from resistance. Engine/driveline inertia and air resistance are ignored. Step: 0.01 s.",
+    aM2:"Launch is in 1st gear and the base torque is always available even below minimum RPM. During a shift, traction is zero for the shift delay (measured: 0–0.5 s)."
+  });
+  ["ja","en"].forEach(l => { translations[l].pM5 = translations[l].pM5.replace("Mass.TakeOff", "Mass.Empty+Fuel"); });
+  const bodyMass = txt => { const e = blkNum(txt, "Empty"), f = blkNum(txt, "Fuel"); return e !== "" ? fmtNum(+e + (+f || 0)) : blkNum(txt, "TakeOff"); };
+  const aSlope = $("accSlope"), aOver = $("aOverlay"), DT = 0.01;
+  [aSlope, aOver].forEach(e => e.addEventListener("change", updateAcc));
+  [$("accCrr"), $("accLag")].forEach(e => e.addEventListener("input", updateAcc));
+
+  function simAcc(r, slope) {
+    const crr = Number($("accCrr").value) >= 0 && $("accCrr").value !== "" ? Number($("accCrr").value) : ROAD_CRR;
+    const lag = Number($("accLag").value) > 0 ? Number($("accLag").value) : 0;
+    const th = Math.atan(slope/100), Rf = r.mass*G*(Math.sin(th) + crr*Math.cos(th)), M = r.mass + (r.extraM || 0);
+    const gs = r.gs, last = gs.length-1, pts = [{t:0, v:0, d:0, g:0}], sh = [];
+    let gi = 0, v = 0, d = 0, t = 0, top = null, pause = 0;
+    for (let n=0; n<200000; n++) {
+      let g = gs[gi], rpm = Math.max(r.minRpm, v*3.6/g.k);
+      if (pause <= 0 && rpm >= r.rpm - 1e-9) {
+        if (gi === last) { top = {t, v, d}; break; }
+        gi++; g = gs[gi]; pause = lag; rpm = Math.max(r.minRpm, v*3.6/g.k);
+        sh.push({t, v:v*3.6, d, g:gi});
+      }
+      const inPause = pause > 0, F = inPause ? 0 : r.base*r.fc(rpm/r.rpm)*g.tot/r.rad;
+      if (inPause) pause -= DT;
+      const a = (F - Rf)/M;
+      if (!inPause && a <= 1e-4) break;
+      const v2 = Math.max(0, v + a*DT); d += (v+v2)/2*DT; v = v2; t += DT;
+      pts.push({t, v:v*3.6, d, g:gi});
+    }
+    const end = pts[pts.length-1]; let t400 = null;
+    const i4 = pts.findIndex(p => p.d >= 400);
+    if (i4 > 0) { const p = pts[i4-1], q = pts[i4]; t400 = p.t + (400-p.d)/(q.d-p.d)*(q.t-p.t); }
+    else if (end.v > 0.5) t400 = end.t + (400-end.d)/(end.v/3.6);
+    return {pts, sh, top, t400, end};
+  }
+
+  function drawAcc(cv, items, kind, ax, nc) {
+    const c = cv.getContext("2d"), rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv._geo = null; cv._items = items;
+    if (rect.width < 10) return;
+    cv.width = Math.round(rect.width*dpr); cv.height = Math.round(rect.height*dpr);
+    c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,rect.width,rect.height);
+    if (!items.length || !ax) return;
+    const w = rect.width, h = rect.height, left = 58, right = 16, top = 18, bottom = 46, pw = w-left-right, ph = h-top-bottom;
+    const yv = kind === "v" ? ax.v : ax.d, tS = niceStep(ax.t, 8), yS = niceStep(yv, 8);
+    const tMax = Math.max(tS, Math.ceil(ax.t/tS - 1e-9)*tS), yMax = Math.max(yS, Math.ceil(yv/yS - 1e-9)*yS);
+    const X = t => left + t/tMax*pw, Y = y => top+ph - y/yMax*ph, val = p => kind === "v" ? p.v : p.d;
+    cv._geo = {left, top, pw, ph, tMax, yMax};
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed", txt = dark ? "#f3f4f6" : "#17202a";
+    c.lineWidth = 1; c.font = "12px system-ui,sans-serif";
+    for (let i=0; i*yS <= yMax + yS*1e-6; i++) {
+      const y = Y(i*yS); c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
+      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText((i*yS).toFixed(decOf(yS)), left-8, y);
+    }
+    for (let i=0; i*tS <= tMax + tS*1e-6; i++) {
+      const x = X(i*tS); c.strokeStyle = grid; c.beginPath(); c.moveTo(x,top); c.lineTo(x,top+ph); c.stroke();
+      c.fillStyle = axis; c.textAlign = "center"; c.textBaseline = "top"; c.fillText((i*tS).toFixed(decOf(tS)), x, top+ph+8);
+    }
+    c.strokeStyle = axis; c.strokeRect(left, top, pw, ph);
+    c.fillStyle = txt; c.font = "13px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "alphabetic";
+    c.fillText(tr("aAxisT"), left+pw/2, h-8);
+    c.save(); c.translate(15, top+ph/2); c.rotate(-Math.PI/2); c.fillText(tr(kind === "v" ? "aAxisV" : "aAxisD"), 0, 0); c.restore();
+    c.save(); c.beginPath(); c.rect(left-6, top-6, pw+12, ph+12); c.clip();
+    if (kind === "d" && 400 <= yMax) {
+      c.strokeStyle = "#8a8f98"; c.lineWidth = 1; c.setLineDash([2,4]); c.beginPath(); c.moveTo(left, Y(400)); c.lineTo(left+pw, Y(400)); c.stroke();
+      c.fillStyle = "#8a8f98"; c.font = "11px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText("400 m", left+pw-4, Y(400)-2);
+    }
+    items.forEach(it => {
+      const pts = it.sim.pts; let cg = pts.length > 1 ? pts[1].g : 0;
+      c.lineWidth = 2.5; c.setLineDash(it.dash ? [8,5] : []); c.strokeStyle = gearColor(cg, nc);
+      c.beginPath(); c.moveTo(X(pts[0].t), Y(val(pts[0])));
+      for (let j=1; j<pts.length; j++) {
+        const p = pts[j];
+        if (p.g !== cg) { c.stroke(); cg = p.g; c.strokeStyle = gearColor(cg, nc); c.beginPath(); c.moveTo(X(pts[j-1].t), Y(val(pts[j-1]))); }
+        c.lineTo(X(p.t), Y(val(p)));
+      }
+      c.stroke(); c.setLineDash([]);
+      it.sim.sh.forEach(s => {
+        c.fillStyle = gearColor(s.g, nc); c.strokeStyle = dark ? "#111827" : "#fff"; c.lineWidth = 1.5;
+        c.beginPath(); c.arc(X(s.t), Y(val(s)), 4.5, 0, Math.PI*2); c.fill(); c.stroke();
+      });
+    });
+    c.restore();
+  }
+
+  function updateAcc() {
+    if ($("tab-acc").hidden) return;
+    const slope = Number(aSlope.value);
+    const res = [0,1].map(i => { const r = calcPerf(i); if (!r || r.error) return r; return r.mass ? {...r, sim:simAcc(r, slope)} : {error:tr("aErrMass")}; });
+    $("aError").textContent = res.map((r,i) => r && r.error ? `${tr("pVehicle")} ${i+1}: ${r.error}` : "").filter(Boolean).join(" ");
+    const ok = res.map(r => r && !r.error ? r : null), valid = ok.filter(Boolean), ov = aOver.checked && valid.length > 1;
+    $("aCharts").classList.toggle("two", valid.length > 1 && !ov);
+    $("aCharts").classList.toggle("overlay", ov);
+    [0,1].forEach(i => { $("aCol"+i).hidden = !ok[i]; });
+    const nc = Math.max(0, ...valid.map(r => r.gs.length));
+    const mx = f => (Math.max(...valid.map(f)) || 1)*1.1;
+    const ax = valid.length ? {t: mx(r => r.sim.end.t), v: mx(r => Math.max(...r.sim.pts.map(p => p.v))), d: mx(r => r.sim.end.d)} : null;
+    const nm = (r,i) => r.vname || r.ename || `${tr("pVehicle")} ${i+1}`;
+    const all = ok.map((r,k) => r && {sim:r.sim, name:nm(r,k), dash:ov && k === 1}).filter(Boolean);
+    const fT = v => v == null ? tr("aNo") : v.toFixed(2) + " s";
+    [0,1].forEach(i => {
+      const r = ok[i], items = ov ? (i === 0 ? all : []) : (r ? [{sim:r.sim, name:nm(r,i), dash:false}] : []);
+      drawAcc($("aV"+i), items, "v", ax, nc); drawAcc($("aD"+i), items, "d", ax, nc);
+      $("aHead"+i).innerHTML = r ? `<div class="vn">${esc(nm(r,i))}${ov && i === 1 ? tr("aDashed") : ""}</div>` : "";
+      $("aLeg"+i).innerHTML = r ? r.gs.map((g,gi) => `<span style="color:${gearColor(gi,nc)}"><i class="line-key"></i>${gearName(g.n)}</span>`).join("") + `<span>● ${tr("aShift")}</span>` : "";
+      $("aRes"+i).innerHTML = r ? `<div class="result"><strong>${esc(nm(r,i))}</strong>
+        <small>${tr("aSumTop")} ${r.gs[r.gs.length-1].vmax.toFixed(1)} km/h</small>
+        <small>${tr("aSumTime")} ${fT(r.sim.top ? r.sim.top.t : null)}</small>
+        <small>${tr("aSum400")} ${fT(r.sim.t400)}</small></div>` : "";
+    });
+  }
+
+  // crosshair + tooltip: hovering one chart draws the same time line on all of them
+  const aX = ["aV0","aD0","aV1","aD1"].map(id => {
+    const cv = $(id), wrap = cv.parentElement, vl = document.createElement("div"), hl = document.createElement("div"), tip = document.createElement("div");
+    vl.className = "xh xv"; hl.className = "xh xhz"; tip.className = "chart-tip"; wrap.append(vl, hl, tip);
+    return {cv, vl, hl, tip};
+  });
+  const aHide = () => aX.forEach(o => { o.vl.style.display = o.hl.style.display = o.tip.style.display = "none"; });
+  aHide();
+  aX.forEach(me => {
+    me.cv.addEventListener("pointermove", e => {
+      const g = me.cv._geo; if (!g) return aHide();
+      const rect = me.cv.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+      if (x < g.left || x > g.left+g.pw || y < g.top || y > g.top+g.ph) return aHide();
+      const t = (x - g.left)/g.pw*g.tMax;
+      aX.forEach(o => {
+        const og = o.cv._geo; o.hl.style.display = o.tip.style.display = "none";
+        if (!og) { o.vl.style.display = "none"; return; }
+        o.vl.style.cssText = `display:block;left:${og.left + t/og.tMax*og.pw}px;top:${og.top}px;height:${og.ph}px`;
+      });
+      me.hl.style.cssText = `display:block;top:${y}px;left:${g.left}px;width:${g.pw}px`;
+      me.tip.innerHTML = `<div><span>${tr("tipTime")}</span><b>${t.toFixed(2)} s</b></div>` + (me.cv._items || []).map(it => {
+        const p = it.sim.pts[Math.min(it.sim.pts.length-1, Math.round(t/DT))];
+        return `<div><span>${esc(it.name)} (${gearName(p.g+1)})</span><b>${p.v.toFixed(1)} km/h / ${p.d.toFixed(1)} m</b></div>`;
+      }).join("");
+      me.tip.style.cssText = `display:block;top:${g.top+8}px;left:${g.left+8}px`;
+    });
+    me.cv.addEventListener("pointerleave", aHide);
+  });
+
   // ---- Tabs ----
   document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
-    ["torque","perf"].forEach(t => { $("tab-"+t).hidden = t !== btn.dataset.tab; });
-    btn.dataset.tab === "perf" ? updatePerf() : update();
+    ["torque","perf","acc"].forEach(t => { $("tab-"+t).hidden = t !== btn.dataset.tab; });
+    if (btn.dataset.tab !== "torque") $(btn.dataset.tab === "acc" ? "aSlot" : "pSlot").append($("pHost"));
+    btn.dataset.tab === "torque" ? update() : updatePerf();
   }));
 
   $("language").addEventListener("change", e => { language = e.target.value; applyLanguage(); });
