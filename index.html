@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>エンジントルク曲線比較ツール / Engine Torque Curve Comparator</title>
+<title>WarThunder 車両性能ツール / WarThunder Vehicle Performance Tool</title>
 <style>
   :root { color-scheme: light dark; --bg:#fff; --panel:#f4f6f8; --text:#17202a; --muted:#596579; --border:#d7dde5; --accent:#2563eb; }
   @media (prefers-color-scheme: dark) {
@@ -82,25 +82,68 @@
   .chart-wrap.acc canvas { position:absolute; inset:0; }
   .acharts.overlay #aCol1 .chart-wrap { display:none; }
   @media(max-width:760px) { .acharts.two { grid-template-columns:1fr; max-width:600px; } }
+
+  /* ---- app header / shared inputs (compact) ---- */
+  .apphead { display:flex; align-items:center; justify-content:space-between; gap:10px 16px; flex-wrap:wrap; margin-bottom:10px; }
+  .apphead h1 { margin:0; font-size:1.4rem; }
+  .apphead .toolbar { margin:0; gap:10px; }
+  .apphead .toolbar button { padding:5px 10px; font-size:.85rem; }
+  h2.tabtitle { font-size:1.2rem; margin:0 0 4px; }
+  .tabs { margin:14px 0 16px; }
+  .pmore { margin:8px 0 0; }
+  .pmore summary { cursor:pointer; color:var(--muted); font-size:.85rem; }
+  .error { min-height:0; margin:4px 0; }
+  .lead { margin:0 0 10px; }
+  .titlebox { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .helpbtn { padding:5px 12px; font-size:.85rem; border-radius:999px; }
+  .modal { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.45); }
+  .modal-box { position:relative; width:100%; max-width:560px; max-height:85vh; overflow:auto; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:20px 24px; box-shadow:0 8px 30px rgba(0,0,0,.35); }
+  .modal-box h2 { margin:0 0 10px; font-size:1.15rem; padding-right:34px; }
+  .modal-box li { margin:0 0 8px; }
+  .modal-x { position:absolute; top:10px; right:12px; width:32px; height:32px; padding:0; font-size:1.4rem; line-height:1; border-radius:50%; }
+  .help-note { margin:12px 0 0; padding:10px 12px; border-left:3px solid var(--accent); background:var(--panel); border-radius:4px; }
+  .chart-wrap.eng { height:auto; aspect-ratio:1.2/1; }
+  .chart-wrap.eng canvas { position:absolute; inset:0; }
+  .pcharts.overlay #ePanel1 .chart-wrap { display:none; }
 </style>
 </head>
 <body>
 <main>
-  <div class="toolbar" style="justify-content:flex-end;margin-bottom:8px">
-    <label style="margin:0"><span data-i18n="powerUnit"></span>
-      <select id="powerUnit" style="width:auto;display:inline-block;margin-left:6px">
-        <option value="hp">HP</option>
-        <option value="ps">PS</option>
-        <option value="kw">kW</option>
-      </select>
-    </label>
-    <label style="margin:0">Language / 言語
-      <select id="language" aria-label="Language" style="width:auto;display:inline-block;margin-left:6px">
-        <option value="ja">日本語</option>
-        <option value="en">English</option>
-      </select>
-    </label>
+  <header class="apphead">
+    <div class="titlebox"><h1 data-i18n="appTitle"></h1><button type="button" id="helpBtn" class="helpbtn" data-i18n="help"></button></div>
+    <div class="toolbar">
+      <button id="reset" data-i18n="reset"></button>
+      <label style="margin:0"><span data-i18n="powerUnit"></span>
+        <select id="powerUnit" style="width:auto;display:inline-block;margin-left:6px">
+          <option value="hp">HP</option>
+          <option value="ps">PS</option>
+          <option value="kw">kW</option>
+        </select>
+      </label>
+      <label style="margin:0">Language / 言語
+        <select id="language" aria-label="Language" style="width:auto;display:inline-block;margin-left:6px">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <div class="modal" id="helpModal" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-box">
+      <button type="button" class="modal-x" id="helpClose" aria-label="Close">&times;</button>
+      <h2 id="helpTitle" data-i18n="helpTitle"></h2>
+      <ol>
+        <li data-i18n="helpS1"></li>
+        <li data-i18n="helpS2"></li>
+        <li data-i18n="helpS3"></li>
+      </ol>
+      <p class="help-note" data-i18n="helpNote"></p>
+    </div>
   </div>
+
+  <!-- ===== Shared inputs (used by every tool) ===== -->
+  <section class="pinputs" id="pInputs"></section>
 
   <nav class="tabs" role="tablist">
     <button class="tab active" role="tab" data-tab="torque" data-i18n="tabTorque"></button>
@@ -110,47 +153,50 @@
 
   <!-- ===== Tab 1: Torque curves ===== -->
   <section id="tab-torque">
-    <h1 data-i18n="title"></h1>
+    <h2 class="tabtitle" data-i18n="title"></h2>
     <p class="lead" data-i18n="lead"></p>
-
-    <div class="toolbar">
-      <button id="reset" data-i18n="reset"></button>
-    </div>
-
-    <section class="engines" id="engines"></section>
     <p class="error" id="error" role="status"></p>
 
     <section class="chart-card">
-      <h2 style="margin:0" data-i18n="chartTitle"></h2>
       <div class="muted" style="font-size:.85rem" data-i18n="chartDescription"></div>
       <div class="chart-options">
         <label><input type="checkbox" id="showTorque" checked> <span data-i18n="torqueLine"></span></label>
         <label><input type="checkbox" id="showPower" checked> <span data-i18n="powerLine"></span></label>
         <label><input type="checkbox" id="absAxis"> <span data-i18n="absAxis"></span></label>
+        <label><input type="checkbox" id="eOverlay"> <span data-i18n="eOverlay"></span></label>
       </div>
-      <div class="chart-wrap"><canvas id="chart"></canvas></div>
-      <div class="legend" id="legend"></div>
-      <div class="results" id="results"></div>
+      <div class="pcharts" id="eCharts">
+        <div class="ppanel" id="ePanel0" hidden>
+          <div class="phead" id="eHead0"></div>
+          <div class="chart-wrap eng"><canvas id="chart0"></canvas></div>
+          <div class="legend" id="eLegend0" style="justify-content:center"></div>
+          <div class="results" id="eResults0"></div>
+        </div>
+        <div class="ppanel" id="ePanel1" hidden>
+          <div class="phead" id="eHead1"></div>
+          <div class="chart-wrap eng"><canvas id="chart1"></canvas></div>
+          <div class="legend" id="eLegend1" style="justify-content:center"></div>
+          <div class="results" id="eResults1"></div>
+        </div>
+      </div>
     </section>
 
-    <details open>
+    <details>
       <summary data-i18n="modelSummary"></summary>
       <p data-i18n="modelP1"></p>
       <p data-i18n="modelP2"></p>
       <p data-i18n="modelP3"></p>
       <p data-i18n="modelP4"></p>
-      <p data-i18n="modelP5"></p>
       <p data-i18n="modelP6"></p>
     </details>
   </section>
 
   <!-- ===== Tab 2: Performance curves ===== -->
   <section id="tab-perf" hidden>
-    <h1 data-i18n="pTitle"></h1>
+    <h2 class="tabtitle" data-i18n="pTitle"></h2>
     <p class="lead" data-i18n="pLead"></p>
 
-    <div id="pSlot"><div id="pHost"><div class="pinputs" id="pInputs"></div>
-    <p class="error" id="pError" role="status"></p></div></div>
+    <p class="error" id="pError" role="status"></p>
 
     <section class="chart-card">
       <div class="chart-options" style="justify-content:center">
@@ -176,7 +222,7 @@
       </div>
     </section>
 
-    <details open>
+    <details>
       <summary data-i18n="pModelSummary"></summary>
       <p data-i18n="pM1"></p>
       <p data-i18n="pM2"></p>
@@ -184,41 +230,39 @@
       <p data-i18n="pM4"></p>
       <p data-i18n="pM5"></p>
       <p data-i18n="modelP6"></p>
-      <p data-i18n="pM7"></p>
     </details>
   </section>
 
   <!-- ===== Tab 3: Acceleration curves ===== -->
   <section id="tab-acc" hidden>
-    <h1 data-i18n="aTitle"></h1>
+    <h2 class="tabtitle" data-i18n="aTitle"></h2>
     <p class="lead" data-i18n="aLead"></p>
-    <div id="aSlot"></div>
     <p class="error" id="aError" role="status"></p>
     <section class="chart-card">
       <div class="chart-options" style="justify-content:center">
         <label><span data-i18n="accSlope"></span>
           <select id="accSlope" style="width:auto"><option value="0">0%</option><option value="2">2%</option><option value="5">5%</option><option value="7">7%</option><option value="10">10%</option><option value="15">15%</option><option value="20">20%</option><option value="25">25%</option><option value="30">30%</option></select></label>
         <label><input type="checkbox" id="aOverlay"> <span data-i18n="aOverlay"></span></label>
+        <label><input type="checkbox" id="aShowV" checked> <span data-i18n="aShowV"></span></label>
+        <label><input type="checkbox" id="aShowD" checked> <span data-i18n="aShowD"></span></label>
         <label><span data-i18n="aLag"></span> <input type="number" id="accLag" value="0.3" min="0" step="any" style="width:80px"></label>
       </div>
       <div class="acharts" id="aCharts">
         <div class="acol" id="aCol0" hidden>
           <div class="phead" id="aHead0"></div>
           <div class="chart-wrap acc"><canvas id="aV0"></canvas></div>
-          <div class="chart-wrap acc"><canvas id="aD0"></canvas></div>
           <div class="legend" id="aLeg0" style="justify-content:center"></div>
           <div class="results" id="aRes0"></div>
         </div>
         <div class="acol" id="aCol1" hidden>
           <div class="phead" id="aHead1"></div>
           <div class="chart-wrap acc"><canvas id="aV1"></canvas></div>
-          <div class="chart-wrap acc"><canvas id="aD1"></canvas></div>
           <div class="legend" id="aLeg1" style="justify-content:center"></div>
           <div class="results" id="aRes1"></div>
         </div>
       </div>
     </section>
-    <details open>
+    <details>
       <summary data-i18n="aModelSummary"></summary>
       <p data-i18n="aM1"></p><p data-i18n="aM2"></p><p data-i18n="aM3"></p>
     </details>
@@ -229,23 +273,31 @@
   const colors = ["#2563eb", "#dc6b20", "#15966b"];
   // Common curve used when torqFormula is not defined (x = RPM / maxRPM). Estimated from the in-game graph.
   const DEFAULT_CURVE = {a:-2, b:3, c:0};
-  const defaults = [1,2,3].map(n => ({name:`Engine ${n}`, power:"", rpm:"", minRpm:"", a:"", b:"", c:""}));
   const FIELDS = ["power","rpm","minRpm","a","b","c"];
 
   const translations = {
     ja: {
-      title:"エンジントルク曲線比較ツール",
-      lead:"最大3種類のエンジンについて、出力・最低/最大回転数・torqFormulaからトルク曲線を計算して重ねて比較します。",
-      powerUnit:"出力単位", reset:"入力をリセット", chartTitle:"トルク曲線",
+      appTitle:"WarThunder 車両性能ツール",
+      help:"使い方", helpTitle:"使い方",
+      helpS1:"WarThunderからデータマインしたBLKのテキストを、上の車両入力欄の貼り付け欄に入力します。",
+      helpS2:"使用するBLKは <code>aces.vromfs.bin/gamedata/units/tankmodels/</code> にあるものです。",
+      helpS3:"貼り付けると車両・エンジン情報が自動で読み込まれ、各タブのグラフが更新されます。足りない項目は「その他のパラメータ」を開いて手入力できます。",
+      helpNote:"<strong>ご注意：</strong>計算には観察や推測が含まれており、必ずしもゲーム内の挙動に合致しません。",
+      tipRel:"相対位置", tipGear:"ギア", tipNone:"該当する曲線なし", pCurveHdr:"牽引力曲線",
+      aShowV:"車速曲線を表示", aShowD:"走行距離曲線を表示", aKeyV:"車速（左軸・実線）", aKeyD:"走行距離（右軸・一点鎖線）",
+      eOverlay:"2つのエンジンを1つのグラフに合成する", tipTorque:"トルク", tipPower:"出力", tipOut:"範囲外",
+      pMore:"その他のパラメータ（出力・回転数・ギア比・係数など）",
+      title:"エンジン性能曲線",
+      lead:"上の共通入力欄の最大2台分のエンジン（出力・最低/最大回転数・torqFormula）から、トルク曲線と出力曲線を計算して重ねて比較します。",
+      powerUnit:"出力単位", reset:"入力をリセット", chartTitle:"エンジン性能曲線",
       chartDescription:"横軸：相対表示はアイドリング（0%）〜最大回転数（100%）、絶対表示はRPM／縦軸：トルク（kN·m）",
       absAxis:"横軸を絶対RPMで表示", torqueLine:"トルク曲線（実線）", powerLine:"出力曲線（破線）",
       modelSummary:"計算モデルと前提",
       modelP1:'<code>f(x) = ax² + bx + c</code>、ここで <code>x = RPM ÷ maxRPM</code>（0～1）です。最低回転数以下では <code>x = minRPM ÷ maxRPM</code> のトルクで一定とします。',
       modelP2:'トルクを <code>T(x) = Tbase × f(max(x, xmin))</code> と仮定し、指定された最大出力と一致するように基準トルクを逆算します。',
       modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(max(x, xmin))))</code>',
-      modelP4:"出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。torqFormulaが未定義の場合は共通曲線 <code>a=-2, b=3, c=0</code> を使用します。この曲線は、DEVlogに掲載されていた画像から推定した値です。",
-      modelP6:"<strong>トルクの下限：</strong>トルクの形の値 f は、最高回転数での値（f(1) = 1.0、基準トルク）を下限とします（<code>max(f(x), 1.0)</code>）。f(x) < 1.0 になる回転域（共通カーブでは最高回転数の50%未満）では、トルクは1.0で一定になります。これは半クラッチ（クラッチ滑り）による発進・低回転域のトルクを再現するための処理と思われます。複数車両の加速ログ（抗力は車重×0.05）に合わせて推定したもので、ゲーム内部の実装との一致は未確認です。",
-      modelP5:"<strong>注意：</strong>torqFormulaを二次関数とみなした推定モデルです。ゲーム内部の実装との一致は未確認です。入力する最大出力はエンジン単体の値にしてください。",
+      modelP4:"出力はW、回転数はRPM、トルクはN·mで計算し、グラフではkN·mに換算します。torqFormulaが未定義の場合は共通曲線 <code>a=-2, b=3, c=0</code> を使用します。",
+      modelP6:"<strong>トルクの下限：</strong>トルクの形の値 f は、最高回転数での値（f(1) = 1.0、基準トルク）を下限とします（<code>max(f(x), 1.0)</code>）。f(x) < 1.0 になる回転域（共通カーブでは最高回転数の50%未満）では、トルクは1.0で一定になります。これは半クラッチ（クラッチ滑り）による発進・低回転域のトルクを再現するための処理と思われます。",
       engine:"エンジン", configLabel:"設定ファイルのテキストを貼り付け",
       clear:"パラメータテキスト削除", pastePlaceholder:"設定ファイル全文、または engine { ... } ブロックを貼り付け（JSON / BLK形式）",
       configHint:"貼り付けるとエンジン情報を自動で読み込みます。",
@@ -264,11 +316,10 @@
       legend:"実線: トルク / 破線: 出力", baseTorque:"推定基準トルク：",
       peakTorque:"最大トルク：", maxPowerRPM:"最大出力の回転数：", minTorque:"最低回転数でのトルク：", usingDefault:"共通曲線を使用中",
       // performance tab
-      tabTorque:"トルク曲線", tabPerf:"エンジン性能曲線",
-      pTitle:"エンジン性能曲線", pVehicle:"車両", showOverlay:"2台を1つのグラフに重ねる", showDrag:"抗力線（傾斜別）を表示", pDragName:"抗力線（傾斜別）", vehMass:"重量 (kg)（既定：Mass.TakeOff）", missingMass:"Mass.TakeOff", pErrMass:"重量を正の数で入力してください（空欄なら抗力線は描画しません）。", pClimb:"最大牽引力で登れる傾斜：", tipSpeed:"車速", tipForce:"牽引力", tipRpm:"回転数", pNoClimb:"平地でも走行不可",
-      pM7:"<strong>ギアのつなぎ線：</strong>各ギアの牽引力曲線の右端（最大回転数）から、垂直に下へ薄いグレーの破線を引きます。線は、次のギアに変速した直後の牽引力（変速後の回転数での、次のギアの曲線上の点）まで伸びます。変速後の回転数が最低回転数を下回る場合は、最低回転数での牽引力まで伸ばします。牽引力曲線を表示しているときは自動で描画されます。",
-      pM5:"抗力線：抗力 = 重量 × g × (sinθ + Crr × cosθ)、θ = atan(傾斜%/100)。傾斜は 0%（転がり抵抗のみ）・2%・5%・7%・10% と、以降5%刻みで角度30°を超える最初の値（60%）まで。Crr = 0.05（InteractPropsList.tankTrack の road の rollingFrictionK）。trackPhysMat が wheel の車両は Crr = 0.0166。<strong>空気抵抗は考慮していません。</strong>重量は Mass.TakeOff（燃料込み）を既定値とし、空欄なら抗力線は描画しません。牽引力軸の範囲外になる傾斜の線は表示しません。", showPCurve:"定出力曲線を表示", pCurveName:"定出力曲線", pM4:"定出力曲線：牽引力 [N] = 最大出力 [W] ÷ 車速 [m/s]（効率100%の理想曲線）。このモデルでは各ギアの牽引力曲線が、その段の最大出力点でこの曲線に接します。ゲーム内部の計算方法との一致は未確認です。", pOptional:"（入力が成立すると横に並べて比較表示）",
-      pLead:"車両パラメータを1台分貼り付けると、各ギア段の「車速–回転数」直線と「車速–牽引力」曲線を表示します（摩擦・効率を無視した理論値）。車両2も入力すると、横に並べて比較できます（比較時は両グラフの軸を共通にします）。",
+      tabTorque:"エンジン性能曲線", tabPerf:"走行性能曲線",
+      pTitle:"走行性能曲線", pVehicle:"車両", showOverlay:"2台を1つのグラフに重ねる", showDrag:"抗力線（傾斜別）を表示", pDragName:"抗力線（傾斜別）", pErrMass:"重量を正の数で入力してください（空欄なら抗力線は描画しません）。", pClimb:"最大牽引力で登れる傾斜：", tipSpeed:"車速", tipForce:"牽引力", tipRpm:"回転数", pNoClimb:"平地でも走行不可",
+      pM5:"抗力線：抗力 = 重量 × g × (sinθ + Crr × cosθ)、θ = atan(傾斜%/100)。傾斜は 0%（転がり抵抗のみ）・2%・5%・7%・10% と、以降5%刻みで角度30°を超える最初の値（60%）まで。Crr（転がり抵抗係数）は、ゲーム内の処理通り、trackPhysMat が wheel の車両は0.0166、それ以外は0.05（InteractPropsList.tankTrack の road の rollingFrictionK）を自動で使います。<strong>空気抵抗は考慮していません。</strong>重量は Mass.Empty+Fuelから取得します", showPCurve:"定出力曲線を表示", pCurveName:"定出力曲線", pM4:"定出力曲線：牽引力 [N] = 最大出力 [W] ÷ 車速 [m/s]（効率100%の理想曲線）。", pOptional:"（入力が成立すると横に並べて比較表示）",
+      pLead:"上の共通入力欄に車両パラメータを1台分貼り付けると、各ギア段の「車速–回転数」直線と「車速–牽引力」曲線を表示します（摩擦・効率を無視した理論値）。車両2も入力すると、横に並べて比較できます（比較時は両グラフの軸を共通にします）。",
       pPaste:"車両パラメータテキストを貼り付け",
       pPlaceholder:"車両設定ファイルの全文を貼り付け（先頭の model、VehiclePhys の engine / mechanics を読み込みます）",
       pHint:"貼り付けると車両情報を自動で読み込みます。",
@@ -286,21 +337,30 @@
       pModelSummary:"計算式と前提",
       pM1:'車速 [km/h] = 3.6 × RPM × 2π/60 × 車輪半径 ÷ (ギア比 × 最終減速比)　／　牽引力 [N] = エンジントルク × ギア比 × 最終減速比 ÷ 車輪半径',
       pM2:'最終減速比 = <code>mainGearRatio × sideGearRatio</code>、車輪半径 = <code>driveGearRadius</code>。前進段（正のギア比）のみ使用し、後進・中立は無視します。',
-      pM3:'エンジントルクはトルク曲線タブと同じ推定モデルです。効率・摩擦・スリップは考慮しない理論値で、牽引力曲線は最低回転数〜最大回転数の範囲のみ描画します。ギア直線は回転数0から描画します。'
+      pM3:'エンジントルクはエンジン性能曲線タブと同じ推定モデルです。効率・摩擦・スリップは考慮しない理論値で、牽引力曲線は最低回転数〜最大回転数の範囲のみ描画します。ギア直線は回転数0から描画します。'
     },
     en: {
-      title:"Engine Torque Curve Comparator",
-      lead:"Calculate and compare torque curves for up to three engines using power, minimum/maximum RPM, and torqFormula coefficients.",
-      powerUnit:"Power unit", reset:"Reset inputs", chartTitle:"Torque curves",
+      appTitle:"WarThunder Vehicle Performance Tool",
+      help:"How to use", helpTitle:"How to use",
+      helpS1:"Paste datamined WarThunder BLK text into a paste box in the vehicle inputs above.",
+      helpS2:"Use the BLK files found in <code>aces.vromfs.bin/gamedata/units/tankmodels/</code>.",
+      helpS3:"The vehicle and engine data are loaded automatically and every tab's graphs update. Open \"Other parameters\" to fill in anything missing by hand.",
+      helpNote:"<strong>Note:</strong> the calculations include observations and assumptions, so they do not necessarily match in-game behavior.",
+      tipRel:"Position", tipGear:"Gear", tipNone:"No curve here", pCurveHdr:"Traction curve",
+      aShowV:"Show speed curve", aShowD:"Show distance curve", aKeyV:"Speed (left axis, solid)", aKeyD:"Distance (right axis, dash-dot)",
+      eOverlay:"Combine both engines in one graph", tipTorque:"Torque", tipPower:"Power", tipOut:"Out of range",
+      pMore:"Other parameters (power, RPM, gears, coefficients, etc.)",
+      title:"Engine performance curves",
+      lead:"Calculates and overlays torque and power curves for up to two engines (power, min/max RPM, torqFormula) taken from the shared inputs above.",
+      powerUnit:"Power unit", reset:"Reset inputs", chartTitle:"Engine performance curves",
       chartDescription:"X-axis: relative = idle (0%) to max RPM (100%), absolute = RPM / Y-axis: torque (kN·m)",
       absAxis:"Show X-axis as absolute RPM", torqueLine:"Torque curve (solid)", powerLine:"Power curve (dashed)",
       modelSummary:"Calculation model and assumptions",
       modelP1:'<code>f(x) = ax² + bx + c</code>, where <code>x = RPM ÷ maxRPM</code> (0–1). Below the minimum RPM, torque is held at the value for <code>x = minRPM ÷ maxRPM</code>.',
       modelP2:'Torque is assumed to be <code>T(x) = Tbase × f(max(x, xmin))</code>. The base torque is solved so that the specified maximum power is matched.',
       modelP3:'<code>Tbase = Pmax / ((2π / 60) × RPMmax × max(x × f(max(x, xmin))))</code>',
-      modelP4:"Power is calculated in W, speed in RPM, torque in N·m; torque is displayed in kN·m. If torqFormula is undefined, the common curve <code>a=-2, b=3, c=0</code> is used. This curve was estimated from an image published in the DEVlog.",
-      modelP6:"<strong>Torque floor:</strong> the torque shape f is bounded below by its value at maximum RPM (f(1) = 1.0, i.e. the base torque): <code>max(f(x), 1.0)</code>. Wherever f(x) < 1.0 (below 50% of max RPM for the common curve), torque stays flat at 1.0. This is believed to reproduce half-clutch (clutch-slip) behaviour at launch and low RPM. It was inferred from acceleration logs of several vehicles (resistance = 0.05 × vehicle weight); agreement with the game's internal implementation has not been confirmed.",
-      modelP5:"<strong>Note:</strong> This is an estimated model treating torqFormula as a quadratic. It has not been confirmed to match the game's internal implementation. Enter the maximum power of the engine itself.",
+      modelP4:"Power is calculated in W, speed in RPM, torque in N·m; torque is displayed in kN·m. If torqFormula is undefined, the common curve <code>a=-2, b=3, c=0</code> is used.",
+      modelP6:"<strong>Torque floor:</strong> the torque shape f is bounded below by its value at maximum RPM (f(1) = 1.0, i.e. the base torque): <code>max(f(x), 1.0)</code>. Wherever f(x) < 1.0 (below 50% of max RPM for the common curve), torque stays flat at 1.0. This is believed to reproduce half-clutch (clutch-slip) behaviour at launch and low RPM.",
       engine:"Engine", configLabel:"Paste configuration text",
       clear:"Clear parameter text", pastePlaceholder:"Paste the full config file or the engine { ... } block (JSON / BLK format)",
       configHint:"Engine data will be imported automatically when text is pasted.",
@@ -319,11 +379,10 @@
       legend:"Solid: torque / Dashed: power", baseTorque:"Estimated base torque:",
       peakTorque:"Peak torque:", maxPowerRPM:"Maximum power at", minTorque:"Torque at min RPM:", usingDefault:"Using common curve",
       // performance tab
-      tabTorque:"Torque curves", tabPerf:"Performance curves",
-      pTitle:"Engine performance curves", pVehicle:"Vehicle", showOverlay:"Overlay both vehicles in one graph", showDrag:"Show resistance lines (by slope)", pDragName:"Resistance (by slope)", vehMass:"Mass (kg) (default: Mass.TakeOff)", missingMass:"Mass.TakeOff", pErrMass:"Enter a positive mass (leave blank to hide resistance lines).", pClimb:"Slope climbable at peak traction:", tipSpeed:"Speed", tipForce:"Traction", tipRpm:"Engine speed", pNoClimb:"cannot move even on flat ground",
-      pM7:"<strong>Gear link lines:</strong> from the right end of each gear's traction curve (max RPM), a light-grey dashed line is drawn vertically downward to the next gear's curve, i.e. the traction right after upshifting (at the post-shift RPM). If the post-shift RPM is below the minimum RPM, the line extends to the traction at minimum RPM. They are drawn automatically whenever the traction curves are shown.",
-      pM5:"Resistance lines: resistance = mass × g × (sinθ + Crr × cosθ), θ = atan(slope%/100). Slopes: 0% (rolling resistance only), 2%, 5%, 7%, 10%, then every 5% up to the first value above 30° (60%). Crr = 0.05 (rollingFrictionK of road in InteractPropsList.tankTrack); vehicles with trackPhysMat 'wheel' use Crr = 0.0166. <strong>Air resistance is not considered.</strong> Mass defaults to Mass.TakeOff (with fuel); leave blank to hide the lines. Lines above the traction axis range are not shown.", showPCurve:"Show constant-power curve", pCurveName:"Constant power curve", pM4:"Constant-power curve: traction [N] = max power [W] ÷ speed [m/s] (ideal, 100% efficiency). In this model each gear's traction curve touches it at that gear's max-power point. Agreement with the game's internal calculation is unconfirmed.", pOptional:"(shown side by side once valid)",
-      pLead:"Paste the parameters of one vehicle to plot each gear's speed–RPM line and speed–traction-force curve (theoretical values, ignoring friction and efficiency). Fill in Vehicle 2 as well to compare side by side (both charts then share the same axes).",
+      tabTorque:"Engine performance curves", tabPerf:"Driving performance curves",
+      pTitle:"Driving performance curves", pVehicle:"Vehicle", showOverlay:"Overlay both vehicles in one graph", showDrag:"Show resistance lines (by slope)", pDragName:"Resistance (by slope)", pErrMass:"Enter a positive mass (leave blank to hide resistance lines).", pClimb:"Slope climbable at peak traction:", tipSpeed:"Speed", tipForce:"Traction", tipRpm:"Engine speed", pNoClimb:"cannot move even on flat ground",
+      pM5:"Resistance lines: resistance = mass × g × (sinθ + Crr × cosθ), θ = atan(slope%/100). Slopes: 0% (rolling resistance only), 2%, 5%, 7%, 10%, then every 5% up to the first value above 30° (60%). As in the game, Crr (rolling resistance coefficient) is chosen automatically: 0.0166 for vehicles whose trackPhysMat is 'wheel', otherwise 0.05 (rollingFrictionK of road in InteractPropsList.tankTrack). <strong>Air resistance is not considered.</strong> The mass is taken from Mass.Empty+Fuel.", showPCurve:"Show constant-power curve", pCurveName:"Constant power curve", pM4:"Constant-power curve: traction [N] = max power [W] ÷ speed [m/s] (ideal, 100% efficiency).", pOptional:"(shown side by side once valid)",
+      pLead:"Paste the parameters of one vehicle into the shared inputs above to plot each gear's speed–RPM line and speed–traction-force curve (theoretical values, ignoring friction and efficiency). Fill in Vehicle 2 as well to compare side by side (both charts then share the same axes).",
       pPaste:"Paste vehicle parameter text",
       pPlaceholder:"Paste the full vehicle config (reads the top-level model and engine / mechanics in VehiclePhys)",
       pHint:"Vehicle data will be imported automatically when text is pasted.",
@@ -341,17 +400,14 @@
       pModelSummary:"Formulas and assumptions",
       pM1:'Speed [km/h] = 3.6 × RPM × 2π/60 × wheel radius ÷ (gear ratio × final ratio) / Traction [N] = engine torque × gear ratio × final ratio ÷ wheel radius',
       pM2:'Final ratio = <code>mainGearRatio × sideGearRatio</code>, wheel radius = <code>driveGearRadius</code>. Only forward (positive) ratios are used; reverse and neutral are ignored.',
-      pM3:'Engine torque uses the same estimated model as the torque tab. Efficiency, friction and slip are ignored. Traction curves are drawn only from min to max RPM; gear lines start from 0 RPM.'
+      pM3:'Engine torque uses the same estimated model as the engine performance tab. Efficiency, friction and slip are ignored. Traction curves are drawn only from min to max RPM; gear lines start from 0 RPM.'
     }
   };
   let language = String((navigator.languages && navigator.languages[0]) || navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
   const tr = key => translations[language][key] ?? translations.ja[key] ?? key;
   const $ = id => document.getElementById(id);
 
-  const root = $("engines");
   const powerUnit = $("powerUnit");
-  const canvas = $("chart");
-  const ctx = canvas.getContext("2d");
   const showTorque = $("showTorque");
   const showPower = $("showPower");
   const absAxis = $("absAxis");
@@ -359,75 +415,11 @@
   function applyLanguage() {
     document.documentElement.lang = language;
     document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = tr(el.dataset.i18n); });
+    document.title = tr("appTitle");
     perfLang();
-    renderInputs(readInputs());
-    update();
-    updatePerf();
+    refresh();
   }
   const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
-
-  function renderInputs(data) {
-    const u = powerUnit.value.toUpperCase();
-    root.innerHTML = data.map((e,i) => `
-      <article class="card">
-        <h2><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colors[i]};margin-right:7px"></span>${tr("engine")} ${i+1}</h2>
-        <div class="config-box">
-          <div class="config-head">
-            <label>${tr("configLabel")}</label>
-            <button type="button" class="clear-config" data-i="${i}">${tr("clear")}</button>
-          </div>
-          <textarea class="config-text" data-i="${i}" placeholder="${tr("pastePlaceholder")}"></textarea>
-          <div class="config-status" id="configStatus${i}">${tr("configHint")}</div>
-        </div>
-        <label>${tr("engineName")}</label>
-        <input data-k="name" value="${esc(e.name)}" placeholder="${tr("exampleName")}">
-        <label>${tr("maxOutput")} (${u})</label>
-        <input type="number" min="0" step="any" data-k="power" value="${esc(e.power)}" placeholder="1500">
-        <div class="grid2">
-          <div><label>${tr("maxRPM")} (RPM)</label><input type="number" min="0" step="any" data-k="rpm" value="${esc(e.rpm)}" placeholder="3000"></div>
-          <div><label>${tr("minRPM")} (RPM)</label><input type="number" min="0" step="any" data-k="minRpm" value="${esc(e.minRpm)}" placeholder="700"></div>
-        </div>
-        <label>${tr("coefficients")}</label>
-        <div class="grid3">
-          <div><label>a</label><input type="number" step="any" data-k="a" value="${esc(e.a)}" placeholder="${DEFAULT_CURVE.a}"></div>
-          <div><label>b</label><input type="number" step="any" data-k="b" value="${esc(e.b)}" placeholder="${DEFAULT_CURVE.b}"></div>
-          <div><label>c</label><input type="number" step="any" data-k="c" value="${esc(e.c)}" placeholder="${DEFAULT_CURVE.c}"></div>
-        </div>
-      </article>`).join("");
-    root.querySelectorAll("input[data-k]").forEach(el => el.addEventListener("input", update));
-    root.querySelectorAll(".config-text").forEach(el => el.addEventListener("input", () => onConfigInput(el)));
-    root.querySelectorAll(".clear-config").forEach(btn => btn.addEventListener("click", () => {
-      const i = Number(btn.dataset.i), card = root.querySelectorAll("article")[i];
-      card.querySelector(".config-text").value = "";
-      card.querySelectorAll("input[data-k]").forEach(f => f.value = "");
-      const st = $(`configStatus${i}`);
-      st.textContent = tr("statusCleared"); st.className = "config-status";
-      update();
-    }));
-  }
-
-  function onConfigInput(el) {
-    const i = Number(el.dataset.i), st = $(`configStatus${i}`);
-    if (!el.value.trim()) { st.textContent = tr("configHint"); st.className = "config-status"; return; }
-    try {
-      const p = parseEngineConfig(el.value);
-      const card = root.querySelectorAll("article")[i];
-      FIELDS.concat("name").forEach(k => { const f = card.querySelector(`[data-k="${k}"]`); if (f) f.value = p[k] ?? ""; });
-      const missing = [];
-      if (p.power === "") missing.push(tr("missingPower"));
-      if (p.rpm === "") missing.push(tr("missingRPM"));
-      if (p.minRpm === "") missing.push(tr("missingMin"));
-      const noFormula = p.a === "" && p.b === "" && p.c === "";
-      st.textContent = missing.length
-        ? `${tr("statusLoaded")}${missing.join(", ")}`
-        : `${tr("statusSuccess")}${p.name}${noFormula ? tr("statusDefault") : ""}`;
-      st.className = missing.length ? "config-status bad" : "config-status ok";
-      update();
-    } catch (err) {
-      st.textContent = `${tr("statusError")}${err.message}`;
-      st.className = "config-status bad";
-    }
-  }
 
   // ---- Parsing: JSON first, then BLK-style text ("key:r = value", "block { ... }") ----
   const asText = v => (v === undefined || v === null || v === "") ? "" : String(v);
@@ -486,9 +478,12 @@
   }
 
   // ---- Calculation ----
-  const readInputs = () => [...root.querySelectorAll("article")].map(card => {
-    const o = {}; card.querySelectorAll("input[data-k]").forEach(el => o[el.dataset.k] = el.value); return o;
+  // Engine inputs come from the shared vehicle cards (engine name falls back to the vehicle name)
+  const readInputs = () => [0,1].map(i => {
+    const o = {}; FIELDS.forEach(k => o[k] = pfField(i,k).value);
+    o.name = pfField(i,"ename").value || pfField(i,"vname").value; return o;
   });
+  function refresh() { update(); updatePerf(); }
   const UNIT_W = {hp:745.699871582, ps:735.49875, kw:1000};
   const RAD = 2*Math.PI/60;
 
@@ -528,7 +523,7 @@
       });
       return {
         name: r.name.trim() || `${language==="ja"?"エンジン":"Engine"} ${n}`,
-        base, usedDefault, xmin, rpm, minRpm, minTorque: base*fc(xmin),
+        fc, base, usedDefault, xmin, rpm, minRpm, minTorque: base*fc(xmin),
         peakTorque: base*peakShape, peakX, maxPowerX, data
       };
     });
@@ -541,18 +536,28 @@
   }
   // Number of decimals needed to print multiples of a tick step (e.g. 2.5 -> 1)
   const decOf = step => { const t = +step.toFixed(6); return Math.min(3, t % 1 === 0 ? 0 : String(t).split(".")[1].length); };
-  function draw(series) {
-    const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-    if (rect.width < 10) return;
-    canvas.width = Math.max(1, Math.round(rect.width*dpr)); canvas.height = Math.max(1, Math.round(rect.height*dpr));
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    const w = rect.width, h = rect.height, left=74, right=76, top=24, bottom=48, pw=w-left-right, ph=h-top-bottom;
-    canvas._geo = {left, top, pw, ph};
-    const valid = series.filter(Boolean);
+  // Shared axes so that the per-engine charts are directly comparable
+  function engAxes(valid) {
+    if (!valid.length) return null;
     const maxT = Math.max(0, ...valid.flatMap(s => s.data.map(p => p.t/1000)));
     const maxP = Math.max(0, ...valid.flatMap(s => s.data.map(p => p.p)));
     const tStep = niceStep(maxT*1.08 || 1), pStep = niceStep(maxP*1.08 || 1);
-    const tMax = Math.max(tStep, Math.ceil(maxT*1.08/tStep)*tStep), pMax = Math.max(pStep, Math.ceil(maxP*1.08/pStep)*pStep);
+    return {
+      tStep, pStep,
+      tMax: Math.max(tStep, Math.ceil(maxT*1.08/tStep)*tStep), pMax: Math.max(pStep, Math.ceil(maxP*1.08/pStep)*pStep),
+      lo: Math.min(...valid.map(s => s.minRpm)), hi: Math.max(...valid.map(s => s.rpm)), absMode: absAxis.checked
+    };
+  }
+  function draw(cv, list, ax) {
+    cv._geo = null;
+    const rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if (rect.width < 10 || !ax) return;
+    const ctx = cv.getContext("2d");
+    cv.width = Math.max(1, Math.round(rect.width*dpr)); cv.height = Math.max(1, Math.round(rect.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const w = rect.width, h = rect.height, left=62, right=64, top=20, bottom=46, pw=w-left-right, ph=h-top-bottom;
+    const {tStep, pStep, tMax, pMax, lo, hi, absMode} = ax;
+    cv._geo = {left, top, pw, ph, items:list, absMode, lo, hi, tMax, pMax};
     const X = x => left + x*pw, YT = y => top+ph-(y/tMax)*ph, YP = y => top+ph-(y/pMax)*ph;
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed";
@@ -561,31 +566,28 @@
     for (let y=0; y<=tMax+tStep*1e-8; y+=tStep) {
       const yy = YT(y);
       ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(left,yy); ctx.lineTo(w-right,yy); ctx.stroke();
-      ctx.fillStyle = axis; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(tStep)), left-10, yy);
+      ctx.fillStyle = axis; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(tStep)), left-8, yy);
     }
     for (let y=0; y<=pMax+pStep*1e-8; y+=pStep) {
-      ctx.fillStyle = axis; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(pStep)), w-right+10, YP(y));
+      ctx.fillStyle = axis; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(pStep)), w-right+8, YP(y));
     }
     // X axis. Relative: each engine spans idle(0%)..max(100%). Absolute: shared RPM scale from the lowest idle to the highest max RPM.
-    const absMode = absAxis.checked;
-    const lo = valid.length ? Math.min(...valid.map(s => s.minRpm)) : 0;
-    const hi = valid.length ? Math.max(...valid.map(s => s.rpm)) : 1;
     const dx = (s, x) => absMode ? (x*s.rpm - lo)/(hi - lo) : (x - s.xmin)/(1 - s.xmin);
     let ticks;
     if (absMode) {
-      const st = niceStep(hi - lo);
+      const st = niceStep(hi - lo, 8);
       ticks = [];
       for (let v = Math.ceil(lo/st - 1e-9)*st; v <= hi + st*1e-9; v += st) ticks.push({pos:(v-lo)/(hi-lo), label:String(Math.round(v*100)/100)});
     } else ticks = Array.from({length:11}, (_,k) => ({pos:k/10, label:`${k*10}%`}));
     ticks.forEach(t => {
       const xx = X(t.pos);
       ctx.strokeStyle = dark ? "#273244" : "#edf0f4"; ctx.beginPath(); ctx.moveTo(xx,top); ctx.lineTo(xx,top+ph); ctx.stroke();
-      ctx.fillStyle = axis; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(t.label, xx, top+ph+9);
+      ctx.fillStyle = axis; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(t.label, xx, top+ph+8);
     });
     ctx.fillStyle = dark ? "#f3f4f6" : "#17202a"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.font = "13px system-ui,sans-serif";
-    ctx.fillText(tr(absMode ? "torqueAxisAbs" : "torqueAxis"), left+pw/2, h-7);
-    ctx.save(); ctx.translate(17, top+ph/2); ctx.rotate(-Math.PI/2); ctx.fillText(tr("torqueUnit"), 0, 0); ctx.restore();
-    ctx.save(); ctx.translate(w-15, top+ph/2); ctx.rotate(Math.PI/2); ctx.fillText(`${tr("powerAxis")} (${powerUnit.value.toUpperCase()})`, 0, 0); ctx.restore();
+    ctx.fillText(tr(absMode ? "torqueAxisAbs" : "torqueAxis"), left+pw/2, h-6);
+    ctx.save(); ctx.translate(15, top+ph/2); ctx.rotate(-Math.PI/2); ctx.fillText(tr("torqueUnit"), 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(w-13, top+ph/2); ctx.rotate(Math.PI/2); ctx.fillText(`${tr("powerAxis")} (${powerUnit.value.toUpperCase()})`, 0, 0); ctx.restore();
 
     // Points below idle RPM are not drawn; each line ends at its own max RPM.
     const line = (s, getY, dash) => {
@@ -593,7 +595,7 @@
       s.data.filter(p => p.x >= s.xmin - 1e-9).forEach((p,j) => { const x = X(dx(s,p.x)), y = getY(p); j ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
       ctx.stroke();
     };
-    valid.forEach(s => {
+    list.forEach(s => {
       if (showTorque.checked) {
         line(s, p => YT(p.t/1000), []);
         ctx.fillStyle = colors[s.index]; ctx.beginPath(); ctx.arc(X(dx(s,s.peakX)), YT(s.peakTorque/1000), 4, 0, Math.PI*2); ctx.fill();
@@ -604,22 +606,33 @@
   }
 
   function update() {
+    if ($("tab-torque").hidden) return;
     const calculated = calculate(readInputs());
     $("error").textContent = calculated.filter(x => x && x.error).map(x => x.error).join(" ");
     const series = calculated.map((s,i) => s && !s.error ? {...s, index:i} : null);
-    draw(series);
-    $("legend").innerHTML = series.map(s => s
-      ? `<span style="color:${colors[s.index]}"><i class="line-key"></i><i class="line-key dashed"></i>${esc(s.name)} (${tr("legend")})</span>` : "").join("");
+    const valid = series.filter(Boolean);
+    const overlay = $("eOverlay").checked && valid.length > 1;
+    $("eCharts").classList.toggle("two", valid.length > 1 && !overlay);
+    $("eCharts").classList.toggle("overlay", overlay);
+    const ax = engAxes(valid);
+    const key = s => `<span style="color:${colors[s.index]}"><i class="line-key"></i><i class="line-key dashed"></i>${esc(s.name)} (${tr("legend")})</span>`;
     const rel = (s,x) => ((x - s.xmin)/(1 - s.xmin)*100).toFixed(1);
-    $("results").innerHTML = series.map(s => s ? `
-      <div class="result">
-        <strong><i class="swatch" style="background:${colors[s.index]}"></i>${esc(s.name)}</strong>
-        <small>${tr("baseTorque")} ${(s.base/1000).toFixed(4)} kN·m</small>
-        <small>${tr("peakTorque")} ${(s.peakTorque/1000).toFixed(4)} kN·m (${rel(s,s.peakX)}%)</small>
-        <small>${tr("minTorque")} ${(s.minTorque/1000).toFixed(4)} kN·m (${s.minRpm} RPM)</small>
-        <small>${tr("maxPowerRPM")} ${rel(s,s.maxPowerX)}% (${Math.round(s.maxPowerX*s.rpm)} RPM)</small>
-        ${s.usedDefault ? `<small>${tr("usingDefault")}</small>` : ""}
-      </div>` : "").join("");
+    [0,1].forEach(i => {
+      const s = series[i], list = overlay ? (i === 0 ? valid : []) : (s ? [s] : []);
+      $("ePanel"+i).hidden = !s;
+      $("eHead"+i).innerHTML = s ? `<div class="vn">${esc(overlay && i === 0 ? valid.map(v => v.name).join(" VS ") : s.name)}</div>` : "";
+      draw($("chart"+i), list, ax);
+      $("eLegend"+i).innerHTML = list.map(key).join("");
+      $("eResults"+i).innerHTML = s ? `
+        <div class="result">
+          <strong><i class="swatch" style="background:${colors[s.index]}"></i>${esc(s.name)}</strong>
+          <small>${tr("baseTorque")} ${(s.base/1000).toFixed(4)} kN·m</small>
+          <small>${tr("peakTorque")} ${(s.peakTorque/1000).toFixed(4)} kN·m (${rel(s,s.peakX)}%)</small>
+          <small>${tr("minTorque")} ${(s.minTorque/1000).toFixed(4)} kN·m (${s.minRpm} RPM)</small>
+          <small>${tr("maxPowerRPM")} ${rel(s,s.maxPowerX)}% (${Math.round(s.maxPowerX*s.rpm)} RPM)</small>
+          ${s.usedDefault ? `<small>${tr("usingDefault")}</small>` : ""}
+        </div>` : "";
+    });
   }
 
   // =====================================================================
@@ -635,7 +648,7 @@
 
   const pfCard = i => `
     <div class="card" data-v="${i}">
-      <h2><span data-i18n="pVehicle"></span> ${i+1}${i ? ` <span class="muted" style="font-weight:400;font-size:.8rem" data-i18n="pOptional"></span>` : ""}</h2>
+      <h2><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colors[i]};margin-right:7px"></span><span data-i18n="pVehicle"></span> ${i+1}${i ? ` <span class="muted" style="font-weight:400;font-size:.8rem" data-i18n="pOptional"></span>` : ""}</h2>
       <div class="config-box">
         <div class="config-head">
           <label data-i18n="pPaste"></label>
@@ -647,6 +660,10 @@
       <div class="pgrid">
         <div><label><span data-i18n="vehicleName"></span></label><input data-pk="vname" placeholder="leopard_2a4"></div>
         <div><label><span data-i18n="engineName"></span></label><input data-pk="ename" placeholder="mtu_mb_873_ka_501"></div>
+      </div>
+      <details class="pmore">
+        <summary data-i18n="pMore"></summary>
+        <div class="pgrid">
         <div><label><span data-i18n="maxOutput"></span> (<span class="pUnit">HP</span>)</label><input type="number" min="0" step="any" data-pk="power" placeholder="1500"></div>
         <div><label><span data-i18n="maxRPM"></span> (RPM)</label><input type="number" min="0" step="any" data-pk="rpm" placeholder="2600"></div>
         <div><label><span data-i18n="minRPM"></span> (RPM)</label><input type="number" min="0" step="any" data-pk="minRpm" placeholder="800"></div>
@@ -654,8 +671,8 @@
         <div><label><span data-i18n="wheelRadius"></span></label><input type="number" min="0" step="any" data-pk="radius" placeholder="0.312"></div>
         <div><label><span data-i18n="vehMass"></span></label><input type="number" min="0" step="any" data-pk="mass" placeholder="55150"></div>
         <div><label><span data-i18n="inertiaMass"></span></label><input type="number" min="0" step="any" data-pk="inertia" placeholder="480"></div>
-      </div>
-      <label><span data-i18n="gearRatios"></span></label>
+        </div>
+        <label><span data-i18n="gearRatios"></span></label>
       <input data-pk="gears" placeholder="9.008, 4.504, 3.3565, 2.209, 1.866, 1.523, 1.263, 1.003">
       <label data-i18n="coefficients"></label>
       <div class="grid3" style="max-width:420px">
@@ -663,6 +680,7 @@
         <div><input type="number" step="any" data-pk="b" placeholder="b = 3"></div>
         <div><input type="number" step="any" data-pk="c" placeholder="c = 0"></div>
       </div>
+      </details>
     </div>`;
   $("pInputs").innerHTML = [0,1].map(pfCard).join("");
   const pCards = [0,1].map(i => document.querySelector(`#pInputs [data-v="${i}"]`));
@@ -730,16 +748,16 @@
           ? {fn: () => `${tr("statusLoaded")}${missing.join(", ")}`, cls: "bad"}
           : {fn: () => `${tr("statusSuccess")}${label}${noFormula ? tr("statusDefault") : ""}`, cls: "ok"};
         renderPfStat(i);
-        updatePerf();
+        refresh();
       } catch (err) {
         pfStat[i] = {fn: () => `${tr("statusError")}${err.message}`, cls: "bad"}; renderPfStat(i);
       }
     });
     card.querySelector(".pClear").addEventListener("click", () => {
       pText.value = ""; PFK.forEach(k => pfField(i,k).value = ""); pPhys[i] = "";
-      pfStat[i] = {fn: () => tr("statusCleared"), cls: ""}; renderPfStat(i); updatePerf();
+      pfStat[i] = {fn: () => tr("statusCleared"), cls: ""}; renderPfStat(i); refresh();
     });
-    card.querySelectorAll("[data-pk]").forEach(el => el.addEventListener("input", updatePerf));
+    card.querySelectorAll("[data-pk]").forEach(el => el.addEventListener("input", refresh));
   });
   showCurves.addEventListener("change", updatePerf);
   showLines.addEventListener("change", updatePerf);
@@ -787,7 +805,7 @@
     gs.forEach(g => {   // slope where resistance equals peak traction: sinθ + Crr·cosθ = F/(m·g)
       g.climb = mass ? Math.asin(Math.min(1, g.pk.f*1000/(mass*G)/Math.hypot(1, crr))) - Math.atan(crr) : null;
     });
-    return {vname:r.vname.trim(), ename:r.ename.trim(), base, fc, rad, crr, extraM: Number(r.inertia) > 0 ? Number(r.inertia) : 0, gs, rpm, minRpm, usedDefault, pW: power*UNIT_W[powerUnit.value], mass, drag};
+    return {idx:i, vname:r.vname.trim(), ename:r.ename.trim(), base, fc, rad, crr, extraM: Number(r.inertia) > 0 ? Number(r.inertia) : 0, gs, rpm, minRpm, usedDefault, pW: power*UNIT_W[powerUnit.value], mass, drag};
   }
 
   // ax: shared axis tops {v, r, f} (theoretical max x 1.1); nc: gear count used for the colour palette
@@ -804,7 +822,7 @@
     const vS = niceStep(ax.v, 8), rS = niceStep(ax.r, 12), fS = niceStep(ax.f, 12);
     const vMax = Math.max(vS, Math.ceil(ax.v/vS - 1e-9)*vS), rMax = Math.max(rS, Math.ceil(ax.r/rS - 1e-9)*rS), fMax = Math.max(fS, Math.ceil(ax.f/fS - 1e-9)*fS);
     const X = v => left + v/vMax*pw, YF = f => top+ph - f/fMax*ph, YR = r => top+ph - r/rMax*ph;
-    cv._geo = {left, top, pw, ph, vMax, rMax, fMax};
+    cv._geo = {left, top, pw, ph, vMax, rMax, fMax, items:list};
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed", txt = dark ? "#f3f4f6" : "#17202a";
 
@@ -857,7 +875,11 @@
         c.stroke();
         c.fillStyle = col; c.beginPath(); c.arc(X(g.pk.v), YF(g.pk.f), 4.5, 0, Math.PI*2); c.fill();
         const nx = res.gs[i+1];                                         // link line: right end -> next gear's curve
-        if (nx && nx.g < g.g) {
+        if (!nx) {                                                        // last gear: down to the bottom of the graph
+          const e = g.data[g.data.length-1];
+          c.strokeStyle = "#b5bac3"; c.lineWidth = 1.3; c.setLineDash([4,4]);
+          c.beginPath(); c.moveTo(X(e.v), YF(e.f)); c.lineTo(X(e.v), YF(0)); c.stroke(); c.setLineDash([]);
+        } else if (nx.g < g.g) {
           const end = g.data[g.data.length-1];
           const rpmEq = Math.max(res.minRpm, end.v / nx.k);             // RPM right after the upshift
           const N = nx.data.length-1, u = (rpmEq - res.minRpm)/(res.rpm - res.minRpm)*N, j0 = Math.min(N-1, Math.floor(u)), fr = u - j0;
@@ -885,6 +907,7 @@
   function updatePerf() {
     updateAcc();
     document.querySelectorAll(".pUnit").forEach(e => { e.textContent = powerUnit.value.toUpperCase(); });
+    if ($("tab-perf").hidden) return;
     const res = [0,1].map(calcPerf);
     $("pError").textContent = res.map((r,i) => r && r.error ? `${tr("pVehicle")} ${i+1}: ${r.error}` : "").filter(Boolean).join(" ");
     const ok = res.map(r => r && !r.error ? r : null), valid = ok.filter(Boolean);
@@ -901,8 +924,9 @@
     } : null;
     [0,1].forEach(i => {
       const r = ok[i];
+      const pn = (q,k) => q.vname || q.ename || `${tr("pVehicle")} ${k+1}`;
       $("pHead"+i).innerHTML = r
-        ? `<div class="vn">${esc(r.vname || r.ename || `${tr("pVehicle")} ${i+1}`)}</div>${r.vname && r.ename ? `<div class="muted">${tr("engine")}: ${esc(r.ename)}${r.usedDefault ? ` ${tr("statusDefault")}` : ""}</div>` : ""}`
+        ? `<div class="vn">${esc(overlay && i === 0 ? ok.map((q,k) => q && pn(q,k)).filter(Boolean).join(" VS ") : pn(r,i))}</div>${r.vname && r.ename ? `<div class="muted">${tr("engine")}: ${esc(r.ename)}${r.usedDefault ? ` ${tr("statusDefault")}` : ""}</div>` : ""}`
         : "";
       drawPerf($("pChart"+i), overlay ? (i === 0 ? valid : []) : (r ? [r] : []), ax, nc);
       $("pLegend"+i).innerHTML = r ? r.gs.map((g,gi) =>
@@ -920,101 +944,162 @@
 
   // ---- Crosshair (all charts) and tooltip (performance charts) ----
   // Charts passed together to linkCross() mirror each other: hovering one shows the guide lines (and tooltip) on all.
-  function makeCross(cv, withTip) {
+  // o.inTip(g,u,ry): tooltip while the cursor is inside the plot (hovered chart only; reads the axis values at the cursor)
+  // o.axisTip(g,u):   tooltip while the cursor is in the x-axis area below the plot (vertical line only; shown on every linked chart)
+  function makeCross(cv, o) {
     const wrap = cv.parentElement;
-    const vl = document.createElement("div"), hl = document.createElement("div");
-    vl.className = "xh xv"; hl.className = "xh xhz";
-    wrap.append(vl, hl);
-    let tip = null;
-    if (withTip) { tip = document.createElement("div"); tip.className = "chart-tip"; wrap.append(tip); }
-    const hide = () => { vl.style.display = hl.style.display = "none"; if (tip) tip.style.display = "none"; };
+    const vl = document.createElement("div"), hl = document.createElement("div"), tip = document.createElement("div");
+    vl.className = "xh xv"; hl.className = "xh xhz"; tip.className = "chart-tip";
+    wrap.append(vl, hl, tip);
+    const hide = () => { vl.style.display = hl.style.display = tip.style.display = "none"; };
     hide();
-    // u, w: position inside the plot area, 0..1 (left->right, top->bottom)
-    const show = (u, w) => {
+    // mode: "in" | "axis"; u, w: position inside the plot area, 0..1 (left->right, top->bottom)
+    const show = (mode, u, w, hovered) => {
       const g = cv._geo, rect = cv.getBoundingClientRect();
       if (!g || rect.width < 10) return hide();
-      const x = g.left + u*g.pw, y = g.top + w*g.ph;
-      vl.style.cssText = `display:block;left:${x}px;top:${g.top}px;height:${g.ph}px`;
-      hl.style.cssText = `display:block;top:${y}px;left:${g.left}px;width:${g.pw}px`;
-      if (tip) {
-        const ry = 1 - w;
-        tip.innerHTML =
-          `<div><span>${tr("tipSpeed")}</span><b>${(u*g.vMax).toFixed(1)} km/h</b></div>` +
-          `<div><span>${tr("tipForce")}</span><b>${(ry*g.fMax).toFixed(1)} kN</b></div>` +
-          `<div><span>${tr("tipRpm")}</span><b>${Math.round(ry*g.rMax)} RPM</b></div>`;
-        tip.style.cssText = `display:block;top:${g.top+8}px;right:${rect.width-g.left-g.pw+8}px`;
-      }
+      vl.style.cssText = `display:block;left:${g.left + u*g.pw}px;top:${g.top}px;height:${g.ph}px`;
+      if (mode === "in") hl.style.cssText = `display:block;top:${g.top + w*g.ph}px;left:${g.left}px;width:${g.pw}px`;
+      else hl.style.display = "none";
+      const html = mode === "in" ? (hovered && o.inTip ? o.inTip(g, u, 1 - w) : "") : (o.axisTip ? o.axisTip(g, u) : "");
+      if (!html) { tip.style.display = "none"; return; }
+      tip.innerHTML = html;
+      tip.style.cssText = o.pos === "bottom"
+        ? `display:block;bottom:${rect.height-g.top-g.ph+8}px;right:${rect.width-g.left-g.pw+8}px`
+        : `display:block;top:${g.top+8}px;right:${rect.width-g.left-g.pw+8}px`;
     };
-    return {cv, hide, show};
+    return {cv, hide, show, hasAxis: !!o.axisTip};
   }
+  // Charts passed together mirror each other: hovering one shows the guide lines on all.
   function linkCross(list) {
     list.forEach(me => {
       me.cv.addEventListener("pointermove", e => {
         const g = me.cv._geo;
         if (!g) return list.forEach(o => o.hide());
         const rect = me.cv.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
-        if (x < g.left || x > g.left+g.pw || y < g.top || y > g.top+g.ph) return list.forEach(o => o.hide());
+        const inX = x >= g.left && x <= g.left+g.pw;
+        const mode = !inX ? null : (y >= g.top && y <= g.top+g.ph) ? "in" : (y > g.top+g.ph && me.hasAxis) ? "axis" : null;
+        if (!mode) return list.forEach(o => o.hide());
         const u = (x - g.left)/g.pw, w = (y - g.top)/g.ph;
-        list.forEach(o => o.show(u, w));
+        list.forEach(o => o.show(mode, u, w, o === me));
       });
       me.cv.addEventListener("pointerleave", () => list.forEach(o => o.hide()));
     });
   }
-  linkCross([makeCross(canvas, false)]);
-  linkCross([makeCross($("pChart0"), true), makeCross($("pChart1"), true)]);
+  const row = (a, b) => `<div><span>${a}</span><b>${b}</b></div>`;
+  const vehName = r => r.vname || r.ename || `${tr("pVehicle")} ${r.idx+1}`;
+
+  // ---- performance charts ----
+  // inside the plot: speed / traction / RPM read off the axes at the cursor
+  const perfInTip = (g, u, ry) =>
+    row(tr("tipSpeed"), `${(u*g.vMax).toFixed(1)} km/h`) + row(tr("tipForce"), `${(ry*g.fMax).toFixed(1)} kN`) + row(tr("tipRpm"), `${Math.round(ry*g.rMax)} RPM`);
+  // speed axis area: the strongest traction curve (highest on the chart) that the vertical line touches
+  const perfAxisTip = (g, u) => {
+    if (!showCurves.checked) return "";
+    const v = u*g.vMax, items = g.items || [];
+    let best = null;
+    items.forEach(res => res.gs.forEach(gr => {
+      const d = gr.data;
+      if (v < d[0].v - 1e-9 || v > d[d.length-1].v + 1e-9) return;
+      const j = Math.max(1, d.findIndex(p => p.v >= v)), p = d[j-1], q = d[j];
+      const k = q.v > p.v ? Math.min(1, Math.max(0, (v - p.v)/(q.v - p.v))) : 0;
+      const f = p.f + (q.f - p.f)*k;
+      if (!best || f > best.f) best = {f, rpm: p.rpm + (q.rpm - p.rpm)*k, res, gr};
+    }));
+    let html = row(tr("tipSpeed"), `${v.toFixed(1)} km/h`);
+    if (!best) return html + row(tr("pCurveHdr"), tr("tipNone"));
+    html += items.length > 1 ? row(esc(vehName(best.res)), gearName(best.gr.n)) : row(tr("tipGear"), gearName(best.gr.n));
+    return html + row(tr("tipForce"), `${best.f.toFixed(1)} kN`) + row(tr("tipRpm"), `${Math.round(best.rpm)} RPM`);
+  };
+
+  // ---- engine charts ----
+  // inside the plot: x position / torque axis / power axis read off at the cursor (no curve values)
+  const engInTip = (g, u, ry) => {
+    const items = g.items || [];
+    let h;
+    if (g.absMode) h = row(tr("tipRpm"), `${Math.round(g.lo + u*(g.hi - g.lo))} RPM`);
+    else {
+      h = row(tr("tipRel"), `${(u*100).toFixed(1)}%`);
+      if (items.length === 1) h += row(tr("tipRpm"), `${Math.round((items[0].xmin + u*(1 - items[0].xmin))*items[0].rpm)} RPM`);
+    }
+    return h + row(tr("tipTorque"), `${(ry*g.tMax).toFixed(2)} kN·m`) + row(tr("tipPower"), `${(ry*g.pMax).toFixed(0)} ${powerUnit.value.toUpperCase()}`);
+  };
+  // RPM axis area: curve values of each engine at the vertical line
+  const engAxisTip = (g, u) => (g.items || []).map(s => {
+    const name = `<span style="color:${colors[s.index]}">● ${esc(s.name)}</span>`;
+    let x;
+    if (g.absMode) {
+      x = (g.lo + u*(g.hi - g.lo))/s.rpm;
+      if (x < s.xmin - 1e-9 || x > 1 + 1e-9) return `<div>${name}<b>${tr("tipOut")}</b></div>`;
+    } else x = s.xmin + u*(1 - s.xmin);
+    const t = s.base*s.fc(x), pw = t*s.rpm*x*RAD/UNIT_W[powerUnit.value];
+    return `<div>${name}<b>${Math.round(x*s.rpm)} RPM (${((x - s.xmin)/(1 - s.xmin)*100).toFixed(1)}%)</b></div>` +
+      row(tr("tipTorque"), `${(t/1000).toFixed(3)} kN·m`) + row(tr("tipPower"), `${pw.toFixed(0)} ${powerUnit.value.toUpperCase()}`);
+  }).join("");
+  linkCross([makeCross($("chart0"), {inTip:engInTip, axisTip:engAxisTip, pos:"bottom"}), makeCross($("chart1"), {inTip:engInTip, axisTip:engAxisTip, pos:"bottom"})]);
+  linkCross([makeCross($("pChart0"), {inTip:perfInTip, axisTip:perfAxisTip, pos:"top"}), makeCross($("pChart1"), {inTip:perfInTip, axisTip:perfAxisTip, pos:"top"})]);
 
   // =====================================================================
-  // Acceleration tab (shares the vehicle inputs with the performance tab)
+  // Acceleration tab (uses the shared inputs)
   // =====================================================================
   Object.assign(translations.ja, {
-    tabAcc:"加速特性曲線", aTitle:"加速特性曲線",
-    aLead:"車両パラメータ（車両性能曲線タブと共通・同期）から、発進後の「経過時間–車速」と「経過時間–走行距離」を計算します。各ギアは最高回転数で自動変速（変速遅れなし）します。",
-    accSlope:"勾配", aOverlay:"2台を1つのグラフに重ねる（2台目は破線）",
-    aAxisT:"経過時間 (秒)", aAxisV:"車速 (km/h)", aAxisD:"走行距離 (m)", aShift:"変速点", aDashed:"（破線）",
-    aSumTop:"最高速度：", aSumTime:"最高速度到達時間：", aSum400:"400m到達時間：", aNo:"到達不可",
-    aErrMass:"重量（Mass.TakeOff）を入力してください。", tipTime:"経過時間",
+    tabAcc:"加速性能曲線",
+    aTitle:"加速性能曲線",
+    aLead:"上の共通入力欄の車両パラメータから、発進後の車速（左軸）と走行距離（右軸）を、経過時間を横軸として1つのグラフに計算します。各ギアは最高回転数に達した時点で自動的に変速し、変速ロスの間は牽引力がゼロになります。",
+    accSlope:"勾配",
+    aOverlay:"2台を1つのグラフに重ねる（2台目は破線）",
+    aLag:"変速ロス (秒)",
+    aAxisT:"経過時間 (秒)",
+    aAxisV:"車速 (km/h)",
+    aAxisD:"走行距離 (m)",
+    aShift:"変速点",
+    aDashed:"（破線）",
+    aSumTop:"最高速度：",
+    aSumTime:"最高速度まで：",
+    aSum400:"400m到達時間：",
+    aNo:"到達不可",
+    aLimit:"（限界速度：{v}km/h）",
+    aErrMass:"車体重量（Mass.Empty+Fuel）を入力してください。",
+    tipTime:"経過時間",
+    vehMass:"車体重量 (kg)（既定：Empty+Fuel）",
+    missingMass:"Mass.Empty / Fuel",
+    inertiaMass:"慣性質量 (kg)（回転体×2 + エンジン）",
     aModelSummary:"計算モデルと前提",
-    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 慣性質量)。抗力 = 車体重量 × g × (sinθ + 転がり抵抗係数 × cosθ)。車体重量は Mass.Empty + Fuel です（TakeOffは挙動に影響しません）。慣性質量は 2×trackMass + engineInertialMass（回転体の慣性は2倍、エンジン慣性は1倍）を貼り付け時に自動入力します（手動で変更も可能）。慣性質量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。転がり抵抗係数は、trackPhysMat が「wheel」の車両は0.0166、それ以外は0.05を自動で使います。空気抵抗は考慮しません。数値積分は0.01秒刻みです。",
-    aM2:"発進時は1速で、最低回転数以下でも最低回転数と同じトルク（基準トルク）が常に出るものとします。変速後の回転数が最低回転数を下回る場合も最低回転数として扱います。",
-    aM3:"最終ギアで最高回転数に達した時点を「最高速度到達」とし、以降は一定速度とみなして400m到達時間を求めます。発進できない勾配、または最高回転数に達する前に牽引力が抗力と釣り合う場合は「到達不可」（400mは釣り合い速度が正なら一定速度で算出）と表示します。"
+    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 慣性質量)。抗力 = 車体重量 × g × (sinθ + 転がり抵抗係数 × cosθ)。車体重量は Mass.Empty + Fuel です。慣性質量は 2×trackMass + engineInertialMass（回転体の慣性は2倍、エンジン慣性は1倍）を貼り付け時に自動入力します（手動で変更も可能）。慣性質量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。転がり抵抗係数は、ゲーム内の処理通り、trackPhysMat が「wheel」の車両は0.0166、それ以外は0.05を自動で使います。空気抵抗は考慮しません。数値積分は0.01秒刻みです。",
+    aM2:"発進は1速で、最低回転数以下でも最低回転数と同じトルク（基準トルク）が常に出るものとします。変速は使用中のギアが最高回転数に達した時点で行い、「変速ロス」の間だけ牽引力をゼロにします。変速後の回転数が最低回転数を下回る場合は最低回転数として扱います。",
+    aM3:"最終ギアで最高回転数に達した時点を最高速度への到達とし、以降は一定速度とみなして400m到達時間を求めます。発進できない勾配、または最高回転数に達する前に牽引力と抗力が釣り合う場合は「到達不可（限界速度：xxkm/h）」と表示します。限界速度は到達できた最高速度で、400mはその速度が正であれば一定速度で走り続けるものとして計算します。"
   });
   Object.assign(translations.en, {
-    tabAcc:"Acceleration curves", aTitle:"Acceleration curves",
-    aLead:"Computes time–speed and time–distance from a standing start using the vehicle inputs shared with the performance tab. Each gear upshifts automatically at max RPM (no shift delay).",
-    accSlope:"Slope", aOverlay:"Overlay both vehicles (vehicle 2 dashed)",
-    aAxisT:"Elapsed time (s)", aAxisV:"Speed (km/h)", aAxisD:"Distance (m)", aShift:"Shift point", aDashed:" (dashed)",
-    aSumTop:"Top speed:", aSumTime:"Time to top speed:", aSum400:"Time to 400 m:", aNo:"not reachable",
-    aErrMass:"Enter the mass (Mass.TakeOff).", tipTime:"Time",
+    tabAcc:"Acceleration performance curves",
+    aTitle:"Acceleration performance curves",
+    aLead:"Computes speed (left axis) and distance (right axis) against elapsed time on one graph from a standing start, using the shared vehicle inputs above. Each gear upshifts automatically when it reaches max RPM, and traction is zero for the duration of the shift loss.",
+    accSlope:"Slope",
+    aOverlay:"Overlay both vehicles (vehicle 2 dashed)",
+    aLag:"Shift loss (s)",
+    aAxisT:"Elapsed time (s)",
+    aAxisV:"Speed (km/h)",
+    aAxisD:"Distance (m)",
+    aShift:"Shift point",
+    aDashed:" (dashed)",
+    aSumTop:"Top speed:",
+    aSumTime:"To top speed:",
+    aSum400:"Time to 400 m:",
+    aNo:"not reachable",
+    aLimit:" (limit speed: {v} km/h)",
+    aErrMass:"Enter the body mass (Mass.Empty+Fuel).",
+    tipTime:"Time",
+    vehMass:"Body mass (kg) (default: Empty+Fuel)",
+    missingMass:"Mass.Empty / Fuel",
+    inertiaMass:"Inertial mass (kg) (rotating parts ×2 + engine)",
     aModelSummary:"Model and assumptions",
-    aM1:"Acceleration = (traction − resistance) ÷ (body mass + inertial mass). Resistance = body mass × g × (sinθ + Crr × cosθ). Body mass is Mass.Empty + Fuel (TakeOff has no effect). Inertial mass = 2 × trackMass + engineInertialMass (rotating parts counted twice, engine once); it is filled in automatically when text is pasted and can be edited. It does not affect climbing, so it acts only as inertia and is excluded from resistance. Crr is chosen automatically: 0.0166 when trackPhysMat is 'wheel', otherwise 0.05. Air resistance is ignored. Step: 0.01 s.",
-    aM2:"The launch is in 1st gear, and the base torque is always available even below minimum RPM. If RPM after an upshift falls below the minimum, it is treated as the minimum RPM.",
-    aM3:"Reaching max RPM in the top gear counts as reaching top speed; speed is then constant and used to find the 400 m time. If the slope prevents launching, or traction balances resistance before max RPM, 'not reachable' is shown (400 m is still computed at the steady speed if it is positive)."
+    aM1:"Acceleration = (traction − resistance) ÷ (body mass + inertial mass). Resistance = body mass × g × (sinθ + Crr × cosθ). Body mass is Mass.Empty + Fuel. Inertial mass = 2 × trackMass + engineInertialMass (rotating parts counted twice, engine once); it is filled in automatically when text is pasted and can be edited. It does not affect climbing, so it acts only as inertia and is excluded from resistance. As in the game, Crr is chosen automatically: 0.0166 when trackPhysMat is 'wheel', otherwise 0.05. Air resistance is ignored. Step: 0.01 s.",
+    aM2:"The launch is in 1st gear, and the base torque is always available even below minimum RPM. A shift happens when the gear in use reaches max RPM, and traction is zero for the shift loss. If RPM after an upshift falls below the minimum, it is treated as the minimum RPM.",
+    aM3:"Reaching max RPM in the top gear counts as reaching top speed; speed is then constant and used to find the 400 m time. If the slope prevents launching, or traction balances resistance before max RPM, 'not reachable (limit speed: xx km/h)' is shown. The limit speed is the highest speed reached, and 400 m is still computed at that speed if it is positive."
   });
-  Object.assign(translations.ja, {
-    aLag:"変速遅れ (秒)",
-    vehMass:"車体重量 (kg)（既定：Empty+Fuel）", missingMass:"Mass.Empty / Fuel",
-    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 慣性質量)。抗力 = 車体重量 × g × (sinθ + 転がり抵抗係数 × cosθ)。車体重量は Mass.Empty + Fuel です（TakeOffは挙動に影響しません）。慣性質量は 2×trackMass + engineInertialMass（回転体の慣性は2倍、エンジン慣性は1倍）を貼り付け時に自動入力します（手動で変更も可能）。慣性質量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。転がり抵抗係数は、trackPhysMat が「wheel」の車両は0.0166、それ以外は0.05を自動で使います。空気抵抗は考慮しません。数値積分は0.01秒刻みです。",
-    aM2:"発進は1速で、最低回転数以下でも基準トルクが常に出るものとします。変速時は「変速遅れ」の間だけ牽引力をゼロにします（実測では0〜0.5秒程度）。"
-  });
-  Object.assign(translations.en, {
-    aLag:"Shift delay (s)",
-    vehMass:"Body mass (kg) (default: Empty+Fuel)", missingMass:"Mass.Empty / Fuel",
-    aM1:"Acceleration = (traction − resistance) ÷ (body mass + inertial mass). Resistance = body mass × g × (sinθ + Crr × cosθ). Body mass is Mass.Empty + Fuel (TakeOff has no effect). Inertial mass = 2 × trackMass + engineInertialMass (rotating parts counted twice, engine once); it is filled in automatically when text is pasted and can be edited. It does not affect climbing, so it acts only as inertia and is excluded from resistance. Crr is chosen automatically: 0.0166 when trackPhysMat is 'wheel', otherwise 0.05. Air resistance is ignored. Step: 0.01 s.",
-    aM2:"Launch is in 1st gear and the base torque is always available even below minimum RPM. During a shift, traction is zero for the shift delay (measured: 0–0.5 s)."
-  });
-  ["ja","en"].forEach(l => { translations[l].pM5 = translations[l].pM5.replace("Mass.TakeOff", "Mass.Empty+Fuel"); });
-  Object.assign(translations.ja, {
-    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 慣性質量)。抗力 = 車体重量 × g × (sinθ + 転がり抵抗係数 × cosθ)。車体重量は Mass.Empty + Fuel です（TakeOffは挙動に影響しません）。慣性質量は 2×trackMass + engineInertialMass（回転体の慣性は2倍、エンジン慣性は1倍）を貼り付け時に自動入力します（手動で変更も可能）。慣性質量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。転がり抵抗係数は、trackPhysMat が「wheel」の車両は0.0166、それ以外は0.05を自動で使います。空気抵抗は考慮しません。数値積分は0.01秒刻みです。"
-  });
-  Object.assign(translations.en, {
-    aM1:"Acceleration = (traction − resistance) ÷ (body mass + inertial mass). Resistance = body mass × g × (sinθ + Crr × cosθ). Body mass is Mass.Empty + Fuel (TakeOff has no effect). Inertial mass = 2 × trackMass + engineInertialMass (rotating parts counted twice, engine once); it is filled in automatically when text is pasted and can be edited. It does not affect climbing, so it acts only as inertia and is excluded from resistance. Crr is chosen automatically: 0.0166 when trackPhysMat is 'wheel', otherwise 0.05. Air resistance is ignored. Step: 0.01 s."
-  });
-  Object.assign(translations.ja, {inertiaMass:"慣性質量 (kg)（回転体×2 + エンジン）"});
-  Object.assign(translations.en, {inertiaMass:"Inertial mass (kg) (rotating parts ×2 + engine)"});
   const inertiaOf = (t, e) => (t === "" && e === "") ? "" : fmtNum(2*(+t || 0) + (+e || 0));
   const bodyMass = txt => { const e = blkNum(txt, "Empty"), f = blkNum(txt, "Fuel"); return e !== "" ? fmtNum(+e + (+f || 0)) : blkNum(txt, "TakeOff"); };
   const aSlope = $("accSlope"), aOver = $("aOverlay"), DT = 0.01;
-  [aSlope, aOver].forEach(e => e.addEventListener("change", updateAcc));
+  const aShowV = $("aShowV"), aShowD = $("aShowD");
+  [aSlope, aOver, aShowV, aShowD].forEach(e => e.addEventListener("change", updateAcc));
   $("accLag").addEventListener("input", updateAcc);
 
   function simAcc(r, slope) {
@@ -1044,24 +1129,32 @@
     return {pts, sh, top, t400, end};
   }
 
-  function drawAcc(cv, items, kind, ax, nc) {
+  // Speed (left axis) and distance (right axis) against elapsed time, drawn on one chart
+  function drawAcc(cv, items, ax, nc) {
     const c = cv.getContext("2d"), rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     cv._geo = null; cv._items = items;
     if (rect.width < 10) return;
     cv.width = Math.round(rect.width*dpr); cv.height = Math.round(rect.height*dpr);
     c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,rect.width,rect.height);
     if (!items.length || !ax) return;
-    const w = rect.width, h = rect.height, left = 58, right = 16, top = 18, bottom = 46, pw = w-left-right, ph = h-top-bottom;
-    const yv = kind === "v" ? ax.v : ax.d, tS = niceStep(ax.t, 8), yS = niceStep(yv, 8);
-    const tMax = Math.max(tS, Math.ceil(ax.t/tS - 1e-9)*tS), yMax = Math.max(yS, Math.ceil(yv/yS - 1e-9)*yS);
-    const X = t => left + t/tMax*pw, Y = y => top+ph - y/yMax*ph, val = p => kind === "v" ? p.v : p.d;
-    cv._geo = {left, top, pw, ph, tMax, yMax};
+    const sv = aShowV.checked, sd = aShowD.checked;
+    const w = rect.width, h = rect.height, left = 58, right = 64, top = 18, bottom = 46, pw = w-left-right, ph = h-top-bottom;
+    const tS = niceStep(ax.t, 8), vS = niceStep(ax.v, 8), dS = niceStep(ax.d, 8);
+    const tMax = Math.max(tS, Math.ceil(ax.t/tS - 1e-9)*tS), vMax = Math.max(vS, Math.ceil(ax.v/vS - 1e-9)*vS), dMax = Math.max(dS, Math.ceil(ax.d/dS - 1e-9)*dS);
+    const X = t => left + t/tMax*pw, YV = y => top+ph - y/vMax*ph, YD = y => top+ph - y/dMax*ph;
+    cv._geo = {left, top, pw, ph, tMax, vMax, dMax};
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed", txt = dark ? "#f3f4f6" : "#17202a";
     c.lineWidth = 1; c.font = "12px system-ui,sans-serif";
-    for (let i=0; i*yS <= yMax + yS*1e-6; i++) {
-      const y = Y(i*yS); c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
-      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText((i*yS).toFixed(decOf(yS)), left-8, y);
+    if (sv) for (let i=0; i*vS <= vMax + vS*1e-6; i++) {            // left axis: speed (grid follows it)
+      const y = YV(i*vS); c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
+      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText((i*vS).toFixed(decOf(vS)), left-8, y);
+    }
+    if (sd) for (let i=0; i*dS <= dMax + dS*1e-6; i++) {            // right axis: distance (grid only when speed is hidden)
+      const y = YD(i*dS);
+      if (!sv) { c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke(); }
+      c.strokeStyle = axis; c.beginPath(); c.moveTo(left+pw,y); c.lineTo(left+pw+4,y); c.stroke();
+      c.fillStyle = axis; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText((i*dS).toFixed(decOf(dS)), left+pw+8, y);
     }
     for (let i=0; i*tS <= tMax + tS*1e-6; i++) {
       const x = X(i*tS); c.strokeStyle = grid; c.beginPath(); c.moveTo(x,top); c.lineTo(x,top+ph); c.stroke();
@@ -1070,26 +1163,32 @@
     c.strokeStyle = axis; c.strokeRect(left, top, pw, ph);
     c.fillStyle = txt; c.font = "13px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "alphabetic";
     c.fillText(tr("aAxisT"), left+pw/2, h-8);
-    c.save(); c.translate(15, top+ph/2); c.rotate(-Math.PI/2); c.fillText(tr(kind === "v" ? "aAxisV" : "aAxisD"), 0, 0); c.restore();
+    if (sv) { c.save(); c.translate(15, top+ph/2); c.rotate(-Math.PI/2); c.fillText(tr("aAxisV"), 0, 0); c.restore(); }
+    if (sd) { c.save(); c.translate(w-13, top+ph/2); c.rotate(Math.PI/2); c.fillText(tr("aAxisD"), 0, 0); c.restore(); }
     c.save(); c.beginPath(); c.rect(left-6, top-6, pw+12, ph+12); c.clip();
-    if (kind === "d" && 400 <= yMax) {
-      c.strokeStyle = "#8a8f98"; c.lineWidth = 1; c.setLineDash([2,4]); c.beginPath(); c.moveTo(left, Y(400)); c.lineTo(left+pw, Y(400)); c.stroke();
-      c.fillStyle = "#8a8f98"; c.font = "11px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText("400 m", left+pw-4, Y(400)-2);
+    if (sd && 400 <= dMax) {
+      c.strokeStyle = "#8a8f98"; c.lineWidth = 1; c.setLineDash([2,4]); c.beginPath(); c.moveTo(left, YD(400)); c.lineTo(left+pw, YD(400)); c.stroke();
+      c.fillStyle = "#8a8f98"; c.font = "11px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText("400 m", left+pw-4, YD(400)-2);
     }
-    items.forEach(it => {
+    // one polyline, coloured per gear; val(p) -> y pixel
+    const curve = (it, val, dash, lw, mr) => {
       const pts = it.sim.pts; let cg = pts.length > 1 ? pts[1].g : 0;
-      c.lineWidth = 2.5; c.setLineDash(it.dash ? [8,5] : []); c.strokeStyle = gearColor(cg, nc);
-      c.beginPath(); c.moveTo(X(pts[0].t), Y(val(pts[0])));
+      c.lineWidth = lw; c.setLineDash(dash); c.strokeStyle = gearColor(cg, nc);
+      c.beginPath(); c.moveTo(X(pts[0].t), val(pts[0]));
       for (let j=1; j<pts.length; j++) {
         const p = pts[j];
-        if (p.g !== cg) { c.stroke(); cg = p.g; c.strokeStyle = gearColor(cg, nc); c.beginPath(); c.moveTo(X(pts[j-1].t), Y(val(pts[j-1]))); }
-        c.lineTo(X(p.t), Y(val(p)));
+        if (p.g !== cg) { c.stroke(); cg = p.g; c.strokeStyle = gearColor(cg, nc); c.beginPath(); c.moveTo(X(pts[j-1].t), val(pts[j-1])); }
+        c.lineTo(X(p.t), val(p));
       }
       c.stroke(); c.setLineDash([]);
       it.sim.sh.forEach(s => {
         c.fillStyle = gearColor(s.g, nc); c.strokeStyle = dark ? "#111827" : "#fff"; c.lineWidth = 1.5;
-        c.beginPath(); c.arc(X(s.t), Y(val(s)), 4.5, 0, Math.PI*2); c.fill(); c.stroke();
+        c.beginPath(); c.arc(X(s.t), val(s), mr, 0, Math.PI*2); c.fill(); c.stroke();
       });
+    };
+    items.forEach(it => {
+      if (sd) curve(it, p => YD(p.d), it.dash ? [2,4] : [10,3,2,3], 2, 3.5);   // distance: dash-dot (dotted for vehicle 2 when overlaid)
+      if (sv) curve(it, p => YV(p.v), it.dash ? [8,5] : [], 2.5, 4.5);          // speed: solid (dashed for vehicle 2 when overlaid)
     });
     c.restore();
   }
@@ -1111,18 +1210,18 @@
     const fT = v => v == null ? tr("aNo") : v.toFixed(2) + " s";
     [0,1].forEach(i => {
       const r = ok[i], items = ov ? (i === 0 ? all : []) : (r ? [{sim:r.sim, name:nm(r,i), dash:false}] : []);
-      drawAcc($("aV"+i), items, "v", ax, nc); drawAcc($("aD"+i), items, "d", ax, nc);
-      $("aHead"+i).innerHTML = r ? `<div class="vn">${esc(nm(r,i))}${ov && i === 1 ? tr("aDashed") : ""}</div>` : "";
-      $("aLeg"+i).innerHTML = r ? r.gs.map((g,gi) => `<span style="color:${gearColor(gi,nc)}"><i class="line-key"></i>${gearName(g.n)}</span>`).join("") + `<span>● ${tr("aShift")}</span>` : "";
+      drawAcc($("aV"+i), items, ax, nc);
+      $("aHead"+i).innerHTML = r ? `<div class="vn">${esc(ov && i === 0 ? ok.map((q,k) => q && nm(q,k)).filter(Boolean).join(" VS ") : nm(r,i))}${ov && i === 1 ? tr("aDashed") : ""}</div>` : "";
+      $("aLeg"+i).innerHTML = r ? r.gs.map((g,gi) => `<span style="color:${gearColor(gi,nc)}"><i class="line-key"></i>${gearName(g.n)}</span>`).join("") + `<span>● ${tr("aShift")}</span>` + (aShowV.checked ? `<span>${tr("aKeyV")}</span>` : "") + (aShowD.checked ? `<span>${tr("aKeyD")}</span>` : "") : "";
       $("aRes"+i).innerHTML = r ? `<div class="result"><strong>${esc(nm(r,i))}</strong>
         <small>${tr("aSumTop")} ${r.gs[r.gs.length-1].vmax.toFixed(1)} km/h</small>
-        <small>${tr("aSumTime")} ${fT(r.sim.top ? r.sim.top.t : null)}</small>
+        <small>${tr("aSumTime")} ${r.sim.top ? fT(r.sim.top.t) : tr("aNo") + tr("aLimit").replace("{v}", r.sim.end.v.toFixed(1))}</small>
         <small>${tr("aSum400")} ${fT(r.sim.t400)}</small></div>` : "";
     });
   }
 
   // crosshair + tooltip: hovering one chart draws the same time line on all of them
-  const aX = ["aV0","aD0","aV1","aD1"].map(id => {
+  const aX = ["aV0","aV1"].map(id => {
     const cv = $(id), wrap = cv.parentElement, vl = document.createElement("div"), hl = document.createElement("div"), tip = document.createElement("div");
     vl.className = "xh xv"; hl.className = "xh xhz"; tip.className = "chart-tip"; wrap.append(vl, hl, tip);
     return {cv, vl, hl, tip};
@@ -1135,15 +1234,17 @@
       const rect = me.cv.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
       if (x < g.left || x > g.left+g.pw || y < g.top || y > g.top+g.ph) return aHide();
       const t = (x - g.left)/g.pw*g.tMax;
+      const wy = (y - g.top)/g.ph;   // same relative height on every chart
       aX.forEach(o => {
-        const og = o.cv._geo; o.hl.style.display = o.tip.style.display = "none";
-        if (!og) { o.vl.style.display = "none"; return; }
+        const og = o.cv._geo; o.tip.style.display = "none";
+        if (!og || o.cv.getBoundingClientRect().width < 10) { o.vl.style.display = o.hl.style.display = "none"; return; }
         o.vl.style.cssText = `display:block;left:${og.left + t/og.tMax*og.pw}px;top:${og.top}px;height:${og.ph}px`;
+        o.hl.style.cssText = `display:block;top:${og.top + wy*og.ph}px;left:${og.left}px;width:${og.pw}px`;
       });
-      me.hl.style.cssText = `display:block;top:${y}px;left:${g.left}px;width:${g.pw}px`;
       me.tip.innerHTML = `<div><span>${tr("tipTime")}</span><b>${t.toFixed(2)} s</b></div>` + (me.cv._items || []).map(it => {
         const p = it.sim.pts[Math.min(it.sim.pts.length-1, Math.round(t/DT))];
-        return `<div><span>${esc(it.name)} (${gearName(p.g+1)})</span><b>${p.v.toFixed(1)} km/h / ${p.d.toFixed(1)} m</b></div>`;
+        const vals = [aShowV.checked ? `${p.v.toFixed(1)} km/h` : "", aShowD.checked ? `${p.d.toFixed(1)} m` : ""].filter(Boolean).join(" / ");
+        return `<div><span>${esc(it.name)} (${gearName(p.g+1)})</span><b>${vals}</b></div>`;
       }).join("");
       me.tip.style.cssText = `display:block;bottom:${rect.height-g.top-g.ph+8}px;right:${rect.width-g.left-g.pw+8}px`;
     });
@@ -1154,18 +1255,23 @@
   document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
     ["torque","perf","acc"].forEach(t => { $("tab-"+t).hidden = t !== btn.dataset.tab; });
-    if (btn.dataset.tab !== "torque") $(btn.dataset.tab === "acc" ? "aSlot" : "pSlot").append($("pHost"));
-    btn.dataset.tab === "torque" ? update() : updatePerf();
+    refresh();
   }));
 
+  const helpModal = $("helpModal");
+  const closeHelp = () => { helpModal.hidden = true; };
+  $("helpBtn").addEventListener("click", () => { helpModal.hidden = false; });
+  $("helpClose").addEventListener("click", closeHelp);
+  helpModal.addEventListener("click", e => { if (e.target === helpModal) closeHelp(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeHelp(); });
   $("language").addEventListener("change", e => { language = e.target.value; applyLanguage(); });
-  powerUnit.addEventListener("change", () => { renderInputs(readInputs()); update(); updatePerf(); });
+  powerUnit.addEventListener("change", refresh);
   showTorque.addEventListener("change", update);
+  $("eOverlay").addEventListener("change", update);
   showPower.addEventListener("change", update);
   absAxis.addEventListener("change", update);
-  $("reset").addEventListener("click", () => { renderInputs(defaults); update(); });
-  window.addEventListener("resize", () => { update(); updatePerf(); });
-  renderInputs(defaults);
+  $("reset").addEventListener("click", () => pCards.forEach(c => c.querySelector(".pClear").click()));
+  window.addEventListener("resize", refresh);
   $("language").value = language;
   applyLanguage();
 })();
