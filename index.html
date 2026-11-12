@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No network access is needed: everything is inline. Blocks external loads/exfiltration even if markup were ever injected. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
 <title>WarThunder 車両性能ツール / WarThunder Vehicle Performance Tool</title>
 <style>
   :root { color-scheme: light dark; --bg:#fff; --panel:#f4f6f8; --text:#17202a; --muted:#596579; --border:#d7dde5; --accent:#2563eb; }
@@ -40,6 +42,9 @@
   .xh { position:absolute; pointer-events:none; z-index:2; }
   .xv { width:0; border-left:1px dashed var(--muted); }
   .xhz { height:0; border-top:1px dashed var(--muted); }
+  .chart-wrap canvas { cursor:none; }   /* hide the mouse pointer over charts (the crosshair shows the position) */
+  .zoom-reset { position:absolute; left:4px; top:2px; z-index:4; width:24px; height:24px; padding:0; display:none; align-items:center; justify-content:center; border-radius:6px; opacity:.92; }
+  .zoom-reset:hover { opacity:1; border-color:var(--accent); color:var(--accent); filter:none; }
   .chart-tip { position:absolute; pointer-events:none; z-index:3; min-width:140px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12px; line-height:1.55; box-shadow:0 2px 8px rgba(0,0,0,.2); }
   .chart-tip div { display:flex; justify-content:space-between; gap:14px; }
   .chart-tip span { color:var(--muted); }
@@ -145,6 +150,16 @@
   <!-- ===== Shared inputs (used by every tool) ===== -->
   <section class="pinputs" id="pInputs"></section>
 
+  <section class="matbox" style="margin:10px 0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px">
+    <label style="margin:0"><span data-i18n="material"></span>
+      <select id="material" style="width:auto;display:inline-block;margin-left:6px">
+        <option value="soil">soil</option>
+        <option value="road">road</option>
+      </select>
+    </label>
+    <small class="muted" id="matInfo"></small>
+  </section>
+
   <nav class="tabs" role="tablist">
     <button class="tab active" role="tab" data-tab="torque" data-i18n="tabTorque"></button>
     <button class="tab" role="tab" data-tab="perf" data-i18n="tabPerf"></button>
@@ -168,13 +183,13 @@
       <div class="pcharts" id="eCharts">
         <div class="ppanel" id="ePanel0" hidden>
           <div class="phead" id="eHead0"></div>
-          <div class="chart-wrap eng"><canvas id="chart0"></canvas></div>
+          <div class="chart-wrap eng"><canvas id="chart0" role="img" data-aria="ariaTorque"></canvas></div>
           <div class="legend" id="eLegend0" style="justify-content:center"></div>
           <div class="results" id="eResults0"></div>
         </div>
         <div class="ppanel" id="ePanel1" hidden>
           <div class="phead" id="eHead1"></div>
-          <div class="chart-wrap eng"><canvas id="chart1"></canvas></div>
+          <div class="chart-wrap eng"><canvas id="chart1" role="img" data-aria="ariaTorque"></canvas></div>
           <div class="legend" id="eLegend1" style="justify-content:center"></div>
           <div class="results" id="eResults1"></div>
         </div>
@@ -209,13 +224,13 @@
       <div class="pcharts" id="pCharts">
         <div class="ppanel" id="pPanel0" hidden>
           <div class="phead" id="pHead0"></div>
-          <div class="chart-wrap tall"><canvas id="pChart0"></canvas></div>
+          <div class="chart-wrap tall"><canvas id="pChart0" role="img" data-aria="ariaPerf"></canvas></div>
           <div class="legend" id="pLegend0" style="justify-content:center"></div>
           <div class="results" id="pResults0"></div>
         </div>
         <div class="ppanel" id="pPanel1" hidden>
           <div class="phead" id="pHead1"></div>
-          <div class="chart-wrap tall"><canvas id="pChart1"></canvas></div>
+          <div class="chart-wrap tall"><canvas id="pChart1" role="img" data-aria="ariaPerf"></canvas></div>
           <div class="legend" id="pLegend1" style="justify-content:center"></div>
           <div class="results" id="pResults1"></div>
         </div>
@@ -250,13 +265,13 @@
       <div class="acharts" id="aCharts">
         <div class="acol" id="aCol0" hidden>
           <div class="phead" id="aHead0"></div>
-          <div class="chart-wrap acc"><canvas id="aV0"></canvas></div>
+          <div class="chart-wrap acc"><canvas id="aV0" role="img" data-aria="ariaAcc"></canvas></div>
           <div class="legend" id="aLeg0" style="justify-content:center"></div>
           <div class="results" id="aRes0"></div>
         </div>
         <div class="acol" id="aCol1" hidden>
           <div class="phead" id="aHead1"></div>
-          <div class="chart-wrap acc"><canvas id="aV1"></canvas></div>
+          <div class="chart-wrap acc"><canvas id="aV1" role="img" data-aria="ariaAcc"></canvas></div>
           <div class="legend" id="aLeg1" style="justify-content:center"></div>
           <div class="results" id="aRes1"></div>
         </div>
@@ -268,11 +283,128 @@
     </details>
   </section>
 </main>
+<!--
+==========================================================================
+ 開発メモ（Claude 向け）: 路面材質パラメータと、未実装の計算要素
+ ※ このブロックはメモのみ。コードからは参照されていない。
+==========================================================================
+
+【出典】
+ - War Thunder の physmat.blk (JSON化されたもの)
+     PhysMats.<材質>.resistanceK                            速度比例抗力の係数
+     InteractPropsList.tankTrack.<材質>.{fk, rollingFrictionK}   履帯 x 材質
+     InteractPropsList.wheel.<材質>.{fk, rollingFrictionK}       車輪 x 材質
+ - DagorEngine (GitHub: GaijinEntertainment/DagorEngine)
+     samples/dngSceneViewer/prog/gameBase/config/physmat.blk  冒頭の式の注釈
+     prog/engine/scene/physMat.cpp   fk -> frict_k, rollingFrictionK -> rollingFric_k を読むだけ
+     prog/gameLibs/vehiclePhys/rayCar.cpp, prog/engine/phys/physCommon/physRayCarBase_impl.h
+                                       車輪(ray car)の摩擦計算。fk を摩擦の上限として使用
+   ※ rollingFric_k は公開コード内のどこでも使われていない。戦車の履帯の牽引力・抵抗の計算は
+     非公開のゲーム本体側にあり、公開コードからは分からない。
+
+【材質パラメータ】  (ソース: physmat.blk)
+  rK = PhysMats の resistanceK ('-' は材質に記載なし)
+  fk = 摩擦の倍率 / roll = rollingFrictionK
+  材質               rK        | 履帯fk  履帯roll | 車輪fk  車輪roll
+  default            2.5e-05   | 1     0.055   | 1     0.045  
+  steel              -         | 1     0.1     | 0.6   0.02   
+  horLandMesh        0.0006    | 1     0.1     | 1     0.2    
+  soil               2.5e-05   | 1     0.055   | 1     0.045  
+  steppe             2.5e-05   | 1     0.055   | 1     0.045  
+  dirt               0.001     | 0.85  0.08    | 0.8   0.2    
+  road               -         | 0.9   0.05    | 1     0.0166 
+  roadSoil           -         | 1     0.055   | 1     0.0172 
+  bricks_red         0.00035   | 0.8   0.05    | 0.8   0.0166 
+  concrete           -         | 0.95  0.05    | 0.95  0.0166 
+  sand               2.5e-05   | 0.9   0.06    | 0.95  0.0475 
+  duneSand           2.5e-05   | 0.8   0.06    | 0.95  0.0475 
+  roadSand           -         | 0.9   0.06    | 1     0.0177 
+  snow               2.5e-05   | 0.9   0.06    | 0.9   0.0475 
+  ice                -         | 0.1   0.045   | 0.15  0.02   
+  football_ramp      -         | 0.3   0.2     | 0.35  0.25   
+  roadSnow           -         | 0.9   0.06    | 0.95  0.0177 
+  rocks              -         | 0.75  0.05    | 0.7   0.07   
+  rocksSlippery      -         | 0.7   0.07    | 0.65  0.09   
+  rocksSlipperyHigh  -         | 0.2   0.04    | 0.25  0.04   
+  fabric             0.00035   | 0.8   0.09    | 0.8   0.15   
+  glass              0.00035   | 0.6   0.02    | 0.6   0.02   
+  stone_snow         0.00035   | 0.75  0.05    | 0.7   0.07   
+  metal              0.00035   | 0.6   0.02    | 0.6   0.02   
+  transparentMetal   0.00035   | 1     0.1     | 0.6   0.02   
+  wood               0.00035   | 0.8   0.0166  | 0.8   0.01   
+  stone              0.00035   | 0.75  0.05    | 0.75  0.07   
+  ceramic            0.00035   | 0.6   0.05    | 0.6   0.07   
+  rubber             0.00035   | 0.8   0.09    | 0.8   0.15   
+  paper              0.00035   | 0.8   0.09    | 0.8   0.15   
+
+  * InteractPropsList に無い材質 (quickSand, snowLower, soil_brown など) は default の値を使う想定 (仮定)。
+  * rK が '-' の材質は default の 0.000025 を仮定 (未確認)。
+  * PhysMats 側にも fk (0.65) と frictionMultiplier (default 1.0, horLandMesh 4.0, water 2.0) を持つ
+    材質があるが、履帯/車輪の牽引力にどう効くかは不明。上の表には含めていない。
+  * 現在のツールの転がり抵抗: 路面マテリアル切替 (soil: 履帯 0.055 / 車輪 0.045, road: 履帯 0.05 / 車輪 0.0166)。rK は両方 2.5e-5 (road の rK は表に無いため default を仮定)。fk は無視。
+    default 履帯は 0.055, default 車輪は 0.045。
+
+【実装済み(rK=2.5e-5・resistanceMult=1 固定): 速度比例抗力】
+  式 (physmat.blk の注釈):  係数 C(v) = rollingFrictionK + resistanceMult * resistanceK * v^2
+   - resistanceMult : 車両(履帯)側の倍率。値は不明 (既定 1 と仮定)
+   - v              : 車速。単位は未確認 (m/s と仮定)
+   - 力への換算は未確認。仮定: F_res = C(v) * m * g * cos(斜面角) + m * g * sin(斜面角)
+  影響の大きさ (resistanceMult=1, 11.1 m/s = 40 km/h のとき追加分 resistanceK * v^2):
+   - 0.000025 の材質 (default, soil, steppe, sand, snow など): 約 0.003 (小さい)
+   - 0.00035 (金属・石・木・ゴムなど): 約 0.04 / dirt 0.001: 約 0.12 / horLandMesh 0.0006: 約 0.07
+  現在のツールは soil/road とも rK=2.5e-5, mult=1, v=m/s として C(v)=Crr+rK*v^2 を使う (草の実測と整合: resistanceMult 10/100/123 で rK≈2.2〜2.5e-5)。
+
+【未実装の計算要素 2: 摩擦(fk)による牽引力の上限】
+  エンジンのコードで分かっていること:
+   - fk は「Friction koef, 0..1」の摩擦係数。2つの材質クラスの既定の組み合わせは積 (a.frict_k * b.frict_k)。
+   - 公開されている車輪モデルでは fk が摩擦の上限になる。簡易モデルは 力 <= fk * 垂直荷重
+     (空転率 約6%で上限に達する)。詳細モデルは Pacejka のタイヤモデルの摩擦に fk を渡す。
+   - 垂直荷重は車輪ごとの荷重。平地では合計がほぼ 車重*g (接地率を別項にする必要は今のところ無い)。
+  実測 (車両: Chi-Ha 15.8t, 200hp, 5段, 加速ログ):
+   - ice (fk 0.1, roll 0.045): 発進後ほぼ一定の加速 約 0.24 m/s^2 が約45秒続く。
+     ギア・車速・空転率 (約76% -> 15%) に依らない。空転中も上限いっぱいの推進力が出ている。
+     逆算した有効摩擦係数 mu_eff = 約 0.070 (= fk の 0.70 倍)。慣性質量 0〜1000kg の仮定で 0.696〜0.711。
+     空転中はエンジン回転数が最大回転数 (2000) に張り付く。
+   - steppe (fk 1.0, roll 0.055): 空転せず、エンジン力だけで決まる計算とログが一致 (平均誤差 約0.3 km/h)。
+     上限 0.70*m*g は 1速 (4.5km/h以下) にしか効かないので、上限の検証にはならない。
+     5速に入った後の回転数は 車速から計算した値と一致 (空転なし)。
+  作業仮説 H1 (未確定):
+     牽引力 F = min( F_engine, mu_eff * fk * m * g * cos(斜面角) ),  mu_eff ≒ 0.70
+     空転しても F は上限値のまま (空転率には依存しない)。
+     加速度 a = (F - F_res) / (m + m_extra)     m_extra = 回転部・履帯の慣性質量
+  未確定事項:
+   - mu_eff が車両 (重量・履帯寸法) や路面によらない定数か。別車両・別 fk の氷以外のログが必要。
+   - fk に厳密に比例するか。上限とエンジン力の交差付近で加速度が折れ線か丸みか (空転率依存の有無)。
+     Chi-Ha で交差する fk の目安 (mu_eff 0.70): 5速 0.12〜0.15 / 4速 0.20〜0.24 / 3速 0.34〜0.43
+   - 慣性質量と転がり抵抗は、今のログだけでは分離できない (トレードオフ)。
+     steppe のログは (慣性0, 転がり0.055) と (慣性1000kg, 0.050) が同程度に合う。
+   - 発進直後の約1秒は合いにくい (ログは発進に遅れがあり、ツールには発進遅れがない)。
+   - ゲーム内の現実的な材質は ice 以外で fk 0.6 以上。上限 (mu_eff*fk*m*g) が効くのは主に
+     ice と、出力に余裕のある車両の低速ギア。
+
+【その他の未実装要素】
+   - 空転中のエンジン回転数の表示 (最大回転数に張り付く)
+   - 斜面での牽引力の上限の cos(斜面角) 補正 (抵抗側の勾配は実装済み)
+   - 材質プルダウンによる fk / 転がり摩擦 / resistanceK の自動入力
+   - 検証ログの取り方の案: ギアを1段に限定、車速とRPMを両方記録、1回につき変える項目は1つ。
+     (1) 発進できる最小の fk を探す (mu_eff = roll / fk_min),  (2) fk を 0.1/0.2/0.3/0.5 と変えて加速度を比較,
+     (3) 車重・ギア比を変えても同じ加速度か, (4) ニュートラルの惰性走行で転がり抵抗を単独で測る,
+     (5) 車重を変えた惰性走行で慣性質量を分離。
+==========================================================================
+-->
 <script>
 (() => {
+  // ===== Constants =====
   const colors = ["#2563eb", "#dc6b20", "#15966b"];
   // Common curve used when torqFormula is not defined (x = RPM / maxRPM). Estimated from the in-game graph.
   const DEFAULT_CURVE = {a:-2, b:3, c:0};
+  const UNIT_W = {hp:745.699871582, ps:735.49875, kw:1000};   // watts per unit; HP = mechanical horsepower (inputs are always HP)
+  const RAD = 2*Math.PI/60;                                    // RPM -> rad/s
+  const G = 9.80665;                                           // gravity (m/s^2)
+  // Rolling resistance Crr (tracks / wheels) and resistanceK per surface material (resistanceMult = 1).
+  // Total drag coefficient C(v) = Crr + rk*v^2 (v in m/s). rK for road is assumed (not in the material table). fk is ignored.
+  const MATS = {soil:{track:0.055, wheel:0.045, rk:2.5e-5}, road:{track:0.05, wheel:0.0166, rk:2.5e-5}};
+  const DT = 0.01, SIM_MAX_STEPS = 200000;                     // acceleration simulation: time step (s) and iteration cap
   const FIELDS = ["power","rpm","minRpm","a","b","c"];
 
   const translations = {
@@ -289,7 +421,7 @@
       pMore:"その他のパラメータ（出力・回転数・ギア比・係数など）",
       title:"エンジン性能曲線",
       lead:"上の共通入力欄の最大2台分のエンジン（出力・最低/最大回転数・torqFormula）から、トルク曲線と出力曲線を計算して重ねて比較します。",
-      powerUnit:"出力単位", reset:"入力をリセット", chartTitle:"エンジン性能曲線",
+      powerUnit:"グラフの出力単位", material:"路面マテリアル", ariaTorque:"トルク曲線と出力曲線のグラフ", ariaPerf:"速度と牽引力のグラフ", ariaAcc:"速度と距離の加速グラフ", matInfo:"転がり抵抗 Crr: 履帯 {t} / 車輪 {w}、速度比例抗力 rK = {k}（resistanceMult=1、摩擦係数 fk は考慮しない）", reset:"入力をリセット", chartTitle:"エンジン性能曲線",
       chartDescription:"横軸：相対表示はアイドリング（0%）〜最大回転数（100%）、絶対表示はRPM／縦軸：トルク（kN·m）",
       absAxis:"横軸を絶対RPMで表示", torqueLine:"トルク曲線（実線）", powerLine:"出力曲線（破線）",
       modelSummary:"計算モデルと前提",
@@ -318,7 +450,7 @@
       // performance tab
       tabTorque:"エンジン性能曲線", tabPerf:"走行性能曲線",
       pTitle:"走行性能曲線", pVehicle:"車両", showOverlay:"2台を1つのグラフに重ねる", showDrag:"抗力線（傾斜別）を表示", pDragName:"抗力線（傾斜別）", pErrMass:"重量を正の数で入力してください（空欄なら抗力線は描画しません）。", pClimb:"最大牽引力で登れる傾斜：", tipSpeed:"車速", tipForce:"牽引力", tipRpm:"回転数", pNoClimb:"平地でも走行不可",
-      pM5:"抗力線：抗力 = 重量 × g × (sinθ + Crr × cosθ)、θ = atan(傾斜%/100)。傾斜は 0%（転がり抵抗のみ）・2%・5%・7%・10% と、以降5%刻みで角度30°を超える最初の値（60%）まで。Crr（転がり抵抗係数）は、ゲーム内の処理通り、trackPhysMat が wheel の車両は0.0166、それ以外は0.05（InteractPropsList.tankTrack の road の rollingFrictionK）を自動で使います。<strong>空気抵抗は考慮していません。</strong>重量は Mass.Empty+Fuelから取得します", showPCurve:"定出力曲線を表示", pCurveName:"定出力曲線", pM4:"定出力曲線：牽引力 [N] = 最大出力 [W] ÷ 車速 [m/s]（効率100%の理想曲線）。", pOptional:"（入力が成立すると横に並べて比較表示）",
+      pM5:"抗力線：抗力 = 重量 × g × (sinθ + (Crr + 2.5e-5 × v²) × cosθ)（v は m/s。曲線になる）、θ = atan(傾斜%/100)。傾斜は 0%（転がり抵抗のみ）・2%・5%・7%・10% と、以降5%刻みで角度30°を超える最初の値（60%）まで。Crr（転がり抵抗係数）と rK は、車両パラメータとタブの間の「路面マテリアル」で選びます（soil: 履帯0.055・車輪0.045、road: 履帯0.05・車輪0.0166、rK は両方 2.5e-5。履帯/車輪は trackPhysMat が wheel かどうかで判定）。摩擦係数 fk は考慮しません。<strong>空気抵抗は考慮していません。</strong>重量は Mass.Empty+Fuelから取得します", showPCurve:"定出力曲線を表示", pCurveName:"定出力曲線", pM4:"定出力曲線：牽引力 [N] = 最大出力 [W] ÷ 車速 [m/s]（効率100%の理想曲線）。", pOptional:"（入力が成立すると横に並べて比較表示）",
       pLead:"上の共通入力欄に車両パラメータを1台分貼り付けると、各ギア段の「車速–回転数」直線と「車速–牽引力」曲線を表示します（摩擦・効率を無視した理論値）。車両2も入力すると、横に並べて比較できます（比較時は両グラフの軸を共通にします）。",
       pPaste:"車両パラメータテキストを貼り付け",
       pPlaceholder:"車両設定ファイルの全文を貼り付け（先頭の model、VehiclePhys の engine / mechanics を読み込みます）",
@@ -333,6 +465,7 @@
       pErrFinal:"最終減速比を正の数で入力してください。",
       pErrRadius:"車輪半径を正の数で入力してください。",
       pErrFactor:"出力が正になりません。係数を確認してください。",
+      pErrRange:"入力値が大きすぎる、または小さすぎるため計算できません。",
       pTotal:"総減速比：", pVmax:"最高速度：", pFmax:"最大牽引力：",
       pModelSummary:"計算式と前提",
       pM1:'車速 [km/h] = 3.6 × RPM × 2π/60 × 車輪半径 ÷ (ギア比 × 最終減速比)　／　牽引力 [N] = エンジントルク × ギア比 × 最終減速比 ÷ 車輪半径',
@@ -352,7 +485,7 @@
       pMore:"Other parameters (power, RPM, gears, coefficients, etc.)",
       title:"Engine performance curves",
       lead:"Calculates and overlays torque and power curves for up to two engines (power, min/max RPM, torqFormula) taken from the shared inputs above.",
-      powerUnit:"Power unit", reset:"Reset inputs", chartTitle:"Engine performance curves",
+      powerUnit:"Chart power unit", material:"Surface material", ariaTorque:"Torque and power curve chart", ariaPerf:"Speed versus traction force chart", ariaAcc:"Speed and distance acceleration chart", matInfo:"Rolling resistance Crr: tracks {t} / wheels {w}, speed-proportional drag rK = {k} (resistanceMult=1; friction coefficient fk is ignored)", reset:"Reset inputs", chartTitle:"Engine performance curves",
       chartDescription:"X-axis: relative = idle (0%) to max RPM (100%), absolute = RPM / Y-axis: torque (kN·m)",
       absAxis:"Show X-axis as absolute RPM", torqueLine:"Torque curve (solid)", powerLine:"Power curve (dashed)",
       modelSummary:"Calculation model and assumptions",
@@ -381,7 +514,7 @@
       // performance tab
       tabTorque:"Engine performance curves", tabPerf:"Driving performance curves",
       pTitle:"Driving performance curves", pVehicle:"Vehicle", showOverlay:"Overlay both vehicles in one graph", showDrag:"Show resistance lines (by slope)", pDragName:"Resistance (by slope)", pErrMass:"Enter a positive mass (leave blank to hide resistance lines).", pClimb:"Slope climbable at peak traction:", tipSpeed:"Speed", tipForce:"Traction", tipRpm:"Engine speed", pNoClimb:"cannot move even on flat ground",
-      pM5:"Resistance lines: resistance = mass × g × (sinθ + Crr × cosθ), θ = atan(slope%/100). Slopes: 0% (rolling resistance only), 2%, 5%, 7%, 10%, then every 5% up to the first value above 30° (60%). As in the game, Crr (rolling resistance coefficient) is chosen automatically: 0.0166 for vehicles whose trackPhysMat is 'wheel', otherwise 0.05 (rollingFrictionK of road in InteractPropsList.tankTrack). <strong>Air resistance is not considered.</strong> The mass is taken from Mass.Empty+Fuel.", showPCurve:"Show constant-power curve", pCurveName:"Constant power curve", pM4:"Constant-power curve: traction [N] = max power [W] ÷ speed [m/s] (ideal, 100% efficiency).", pOptional:"(shown side by side once valid)",
+      pM5:"Resistance lines: resistance = mass × g × (sinθ + (Crr + 2.5e-5 × v²) × cosθ), v in m/s (curves), θ = atan(slope%/100). Slopes: 0% (rolling resistance only), 2%, 5%, 7%, 10%, then every 5% up to the first value above 30° (60%). Crr (rolling resistance coefficient) and rK follow the 'Surface material' selector between the vehicle inputs and the tabs (soil: tracks 0.055 / wheels 0.045; road: tracks 0.05 / wheels 0.0166; rK = 2.5e-5 for both; tracks vs wheels is decided by trackPhysMat = 'wheel'). The friction coefficient fk is ignored. <strong>Air resistance is not considered.</strong> The mass is taken from Mass.Empty+Fuel.", showPCurve:"Show constant-power curve", pCurveName:"Constant power curve", pM4:"Constant-power curve: traction [N] = max power [W] ÷ speed [m/s] (ideal, 100% efficiency).", pOptional:"(shown side by side once valid)",
       pLead:"Paste the parameters of one vehicle into the shared inputs above to plot each gear's speed–RPM line and speed–traction-force curve (theoretical values, ignoring friction and efficiency). Fill in Vehicle 2 as well to compare side by side (both charts then share the same axes).",
       pPaste:"Paste vehicle parameter text",
       pPlaceholder:"Paste the full vehicle config (reads the top-level model and engine / mechanics in VehiclePhys)",
@@ -396,6 +529,7 @@
       pErrFinal:"Enter a positive final drive ratio.",
       pErrRadius:"Enter a positive wheel radius.",
       pErrFactor:"Power is not positive. Check the coefficients.",
+      pErrRange:"Values are too large or too small to calculate.",
       pTotal:"Total ratio:", pVmax:"Top speed:", pFmax:"Peak traction:",
       pModelSummary:"Formulas and assumptions",
       pM1:'Speed [km/h] = 3.6 × RPM × 2π/60 × wheel radius ÷ (gear ratio × final ratio) / Traction [N] = engine torque × gear ratio × final ratio ÷ wheel radius',
@@ -414,23 +548,21 @@
 
   function applyLanguage() {
     document.documentElement.lang = language;
+    // Translations are static, trusted strings (some contain markup). Never interpolate user input into them.
     document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = tr(el.dataset.i18n); });
+    document.querySelectorAll("[data-aria]").forEach(el => { el.setAttribute("aria-label", tr(el.dataset.aria)); });
     document.title = tr("appTitle");
     perfLang();
     refresh();
   }
-  const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  // Escapes text for HTML text and quoted attribute values ("..." and '...'). Use for every user-derived string put into innerHTML.
+  const esc = s => String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("'","&#39;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 
   // ---- Parsing: JSON first, then BLK-style text ("key:r = value", "block { ... }") ----
   const asText = v => (v === undefined || v === null || v === "") ? "" : String(v);
   function makeName(manufacturer, model, fallback) {
     manufacturer = String(manufacturer ?? "").trim(); model = String(model ?? "").trim();
     return manufacturer && model ? `${manufacturer}_${model}` : (model || manufacturer || String(fallback ?? "").trim());
-  }
-  function parseEngineConfig(source) {
-    let json = null;
-    try { json = JSON.parse(source); } catch (_) {}
-    return json !== null ? parseJsonConfig(json) : parseBlkConfig(source);
   }
   function parseJsonConfig(data) {
     const find = node => {
@@ -484,8 +616,6 @@
     o.name = pfField(i,"ename").value || pfField(i,"vname").value; return o;
   });
   function refresh() { update(); updatePerf(); }
-  const UNIT_W = {hp:745.699871582, ps:735.49875, kw:1000};
-  const RAD = 2*Math.PI/60;
 
   function calculate(raw) {
     return raw.map((r,i) => {
@@ -512,7 +642,7 @@
         if (x >= xmin && fc(x) > peakShape) { peakShape = fc(x); peakX = x; }
       }
       if (!(factor > 0)) return {error: tr("errorFactor").replace("{n}",n)};
-      const base = power*UNIT_W[powerUnit.value] / (RAD*rpm*factor);
+      const base = power*UNIT_W.hp / (RAD*rpm*factor);
 
       const xs = Array.from({length:201}, (_,j) => j/200);
       if (!xs.includes(xmin)) xs.push(xmin);
@@ -550,35 +680,41 @@
   }
   function draw(cv, list, ax) {
     cv._geo = null;
+    cv._redraw = () => draw(cv, list, ax);
     const rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     if (rect.width < 10 || !ax) return;
     const ctx = cv.getContext("2d");
     cv.width = Math.max(1, Math.round(rect.width*dpr)); cv.height = Math.max(1, Math.round(rect.height*dpr));
     ctx.setTransform(dpr,0,0,dpr,0,0);
     const w = rect.width, h = rect.height, left=62, right=64, top=20, bottom=46, pw=w-left-right, ph=h-top-bottom;
-    const {tStep, pStep, tMax, pMax, lo, hi, absMode} = ax;
-    cv._geo = {left, top, pw, ph, items:list, absMode, lo, hi, tMax, pMax};
-    const X = x => left + x*pw, YT = y => top+ph-(y/tMax)*ph, YP = y => top+ph-(y/pMax)*ph;
+    const {tStep:tStep0, pStep:pStep0, tMax, pMax, lo, hi, absMode} = ax;
+    const V = cv._view || {z:1, ox:0, oy:0}, Z = V.z;   // wheel zoom: visible window = [o, o + 1/Z] (normalised 0..1)
+    const tStep = Z > 1 ? niceStep(tMax/Z) : tStep0, pStep = Z > 1 ? niceStep(pMax/Z) : pStep0;
+    cv._geo = {left, top, pw, ph, items:list, absMode, lo, hi, tMax, pMax, z:Z, ox:V.ox, oy:V.oy};
+    const X = x => left + (x - V.ox)*Z*pw, YT = y => top+ph-((y/tMax - V.oy)*Z)*ph, YP = y => top+ph-((y/pMax - V.oy)*Z)*ph;
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed";
     const dec = decOf;
     ctx.clearRect(0,0,w,h); ctx.font = "12px system-ui,sans-serif"; ctx.lineWidth = 1;
-    for (let y=0; y<=tMax+tStep*1e-8; y+=tStep) {
-      const yy = YT(y);
+    for (let k=Math.ceil(V.oy*tMax/tStep - 1e-9); k*tStep <= (V.oy + 1/Z)*tMax + tStep*1e-8; k++) {
+      const y = k*tStep, yy = YT(y);
       ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(left,yy); ctx.lineTo(w-right,yy); ctx.stroke();
       ctx.fillStyle = axis; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(tStep)), left-8, yy);
     }
-    for (let y=0; y<=pMax+pStep*1e-8; y+=pStep) {
+    for (let k=Math.ceil(V.oy*pMax/pStep - 1e-9); k*pStep <= (V.oy + 1/Z)*pMax + pStep*1e-8; k++) {
+      const y = k*pStep;
       ctx.fillStyle = axis; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(dec(pStep)), w-right+8, YP(y));
     }
     // X axis. Relative: each engine spans idle(0%)..max(100%). Absolute: shared RPM scale from the lowest idle to the highest max RPM.
     const dx = (s, x) => absMode ? (x*s.rpm - lo)/(hi - lo) : (x - s.xmin)/(1 - s.xmin);
-    let ticks;
+    const ticks = [], x0 = V.ox, x1 = V.ox + 1/Z;
     if (absMode) {
-      const st = niceStep(hi - lo, 8);
-      ticks = [];
-      for (let v = Math.ceil(lo/st - 1e-9)*st; v <= hi + st*1e-9; v += st) ticks.push({pos:(v-lo)/(hi-lo), label:String(Math.round(v*100)/100)});
-    } else ticks = Array.from({length:11}, (_,k) => ({pos:k/10, label:`${k*10}%`}));
+      const st = niceStep((hi - lo)/Z, 8), vLo = lo + x0*(hi - lo), vHi = lo + x1*(hi - lo);
+      for (let k = Math.ceil(vLo/st - 1e-9); k*st <= vHi + st*1e-9; k++) ticks.push({pos:(k*st-lo)/(hi-lo), label:String(Math.round(k*st*100)/100)});
+    } else {
+      const st = niceStep(100/Z, 10);
+      for (let k = Math.ceil(x0*100/st - 1e-9); k*st <= x1*100 + st*1e-9; k++) ticks.push({pos:k*st/100, label:`${(k*st).toFixed(decOf(st))}%`});
+    }
     ticks.forEach(t => {
       const xx = X(t.pos);
       ctx.strokeStyle = dark ? "#273244" : "#edf0f4"; ctx.beginPath(); ctx.moveTo(xx,top); ctx.lineTo(xx,top+ph); ctx.stroke();
@@ -595,6 +731,8 @@
       s.data.filter(p => p.x >= s.xmin - 1e-9).forEach((p,j) => { const x = X(dx(s,p.x)), y = getY(p); j ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
       ctx.stroke();
     };
+    ctx.save();
+    if (Z > 1) { ctx.beginPath(); ctx.rect(left, top, pw, ph); ctx.clip(); }
     list.forEach(s => {
       if (showTorque.checked) {
         line(s, p => YT(p.t/1000), []);
@@ -603,6 +741,7 @@
       if (showPower.checked) line(s, p => YP(p.p), [8,5]);
     });
     ctx.setLineDash([]);
+    ctx.restore();
   }
 
   function update() {
@@ -640,7 +779,8 @@
   // =====================================================================
   const PFK = ["vname","ename","power","rpm","minRpm","a","b","c","gears","final","radius","mass","inertia"];
   const showCurves = $("showCurves"), showLines = $("showLines"), showPCurve = $("showPCurve"), showOverlay = $("showOverlay"), showDrag = $("showDrag");
-  const G = 9.80665, ROAD_CRR = 0.05, WHEEL_CRR = 0.0166, pPhys = ["", ""];   // pPhys: trackPhysMat read from the pasted text (internal)
+  const matSel = $("material"),
+    pPhys = ["", ""];   // pPhys: trackPhysMat read from the pasted text (internal)
   const SLOPES = (() => { const a = [0,2,5,7]; for (let s=10;; s+=5) { a.push(s); if (Math.atan(s/100)*180/Math.PI > 30) break; } return a; })();
   const fmtNum = v => String(+v.toPrecision(10));
   const gearColor = (i, n) => `hsl(${Math.round(i*330/Math.max(n,1))},75%,${matchMedia("(prefers-color-scheme: dark)").matches ? 62 : 46}%)`;
@@ -664,7 +804,7 @@
       <details class="pmore">
         <summary data-i18n="pMore"></summary>
         <div class="pgrid">
-        <div><label><span data-i18n="maxOutput"></span> (<span class="pUnit">HP</span>)</label><input type="number" min="0" step="any" data-pk="power" placeholder="1500"></div>
+        <div><label><span data-i18n="maxOutput"></span> (HP)</label><input type="number" min="0" step="any" data-pk="power" placeholder="1500"></div>
         <div><label><span data-i18n="maxRPM"></span> (RPM)</label><input type="number" min="0" step="any" data-pk="rpm" placeholder="2600"></div>
         <div><label><span data-i18n="minRPM"></span> (RPM)</label><input type="number" min="0" step="any" data-pk="minRpm" placeholder="800"></div>
         <div><label><span data-i18n="finalRatio"></span></label><input type="number" min="0" step="any" data-pk="final" placeholder="4.47"></div>
@@ -683,17 +823,22 @@
       </details>
     </div>`;
   $("pInputs").innerHTML = [0,1].map(pfCard).join("");
+  // Labels and inputs are siblings in the card markup: link each input to its preceding label (accessibility)
+  document.querySelectorAll("#pInputs [data-pk]").forEach((inp, n) => {
+    const lab = inp.previousElementSibling;
+    if (lab && lab.tagName === "LABEL") { inp.id = inp.id || `pf${n}`; lab.htmlFor = inp.id; }
+  });
   const pCards = [0,1].map(i => document.querySelector(`#pInputs [data-v="${i}"]`));
   const pfField = (i, k) => pCards[i].querySelector(`[data-pk="${k}"]`);
   const readPerf = i => Object.fromEntries(PFK.map(k => [k, pfField(i,k).value]));
-  let pfStat = [0,1].map(() => ({fn: () => tr("pHint"), cls: ""}));
+  const pfStat = [0,1].map(() => ({fn: () => tr("pHint"), cls: ""}));
   function renderPfStat(i) { const s = pCards[i].querySelector(".pStatus"); s.textContent = pfStat[i].fn(); s.className = "config-status pStatus " + pfStat[i].cls; }
   function perfLang() { pCards.forEach((c,i) => { c.querySelector(".pText").placeholder = tr("pPlaceholder"); renderPfStat(i); }); }
 
   // Vehicle file: top-level "model", VehiclePhys.engine, VehiclePhys.mechanics
   function parseVehicleConfig(source) {
     let json = null;
-    try { json = JSON.parse(source); } catch (_) {}
+    try { json = JSON.parse(source); } catch { /* not JSON: handled as BLK text */ }
     if (json !== null) return parseVehicleJson(json);
     const e = parseBlkConfig(source);
     const mech = blkBlock(source, "mechanics") ?? "";
@@ -781,14 +926,15 @@
     if (!(r.final !== "" && fin > 0)) return {error: tr("pErrFinal")};
     if (!(r.radius !== "" && rad > 0)) return {error: tr("pErrRadius")};
     const mass = r.mass.trim() === "" ? null : Number(r.mass);
-    if (mass !== null && !(mass > 0)) return {error: tr("pErrMass")};
+    if (mass !== null && !(mass > 0 && Number.isFinite(mass))) return {error: tr("pErrMass")};
 
     const xmin = minRpm/rpm;
     const fc = x => { const t = Math.max(x, xmin); return Math.max(1, co.a*t*t + co.b*t + co.c); };
     let factor = 0;
     for (let k=0; k<=4000; k++) { const x = k/4000; factor = Math.max(factor, x*fc(x)); }
     if (!(factor > 0)) return {error: tr("pErrFactor")};
-    const base = power*UNIT_W[powerUnit.value] / (RAD*rpm*factor);   // N·m
+    const base = power*UNIT_W.hp / (RAD*rpm*factor);   // N·m
+    if (!Number.isFinite(base)) return {error: tr("pErrRange")};   // e.g. 1e308 inputs overflow
 
     const gs = gears.map((g, gi) => {
       const tot = g*fin, k = RAD*rad/tot*3.6;                          // k: km/h per RPM
@@ -800,16 +946,20 @@
       const pk = data.reduce((b,p) => p.f > b.f ? p : b, data[0]);
       return {n:gi+1, g, tot, k, data, pk, vmax:k*rpm};
     });
-    const crr = (pPhys[i] || "").trim().toLowerCase() === "wheel" ? WHEEL_CRR : ROAD_CRR;
-    const drag = mass ? SLOPES.map(sl => { const th = Math.atan(sl/100); return {s: sl, f: mass*G*(Math.sin(th) + crr*Math.cos(th))/1000}; }) : null;
+    // Overflow/underflow guard (extreme inputs such as 1e308 would otherwise produce Infinity/NaN in the charts)
+    if (!gs.every(g => [g.tot, g.k, g.vmax, g.pk.f].every(Number.isFinite) && g.vmax > 0 && g.pk.f > 0)) return {error: tr("pErrRange")};
+    const mat = MATS[matSel.value], crr = (pPhys[i] || "").trim().toLowerCase() === "wheel" ? mat.wheel : mat.track, rk = mat.rk;
+    const drag = mass ? SLOPES.map(sl => { const th = Math.atan(sl/100); return {s: sl, f: mass*G*(Math.sin(th) + crr*Math.cos(th))/1000, q: mass*G*Math.cos(th)*rk/1000}; }) : null;   // f: kN at v=0, q: kN per (m/s)^2
     gs.forEach(g => {   // slope where resistance equals peak traction: sinθ + Crr·cosθ = F/(m·g)
-      g.climb = mass ? Math.asin(Math.min(1, g.pk.f*1000/(mass*G)/Math.hypot(1, crr))) - Math.atan(crr) : null;
+      const ce = crr + rk*Math.pow(g.pk.v/3.6, 2);   // effective Crr at the peak-traction speed
+      g.climb = mass ? Math.asin(Math.min(1, g.pk.f*1000/(mass*G)/Math.hypot(1, ce))) - Math.atan(ce) : null;
     });
-    return {idx:i, vname:r.vname.trim(), ename:r.ename.trim(), base, fc, rad, crr, extraM: Number(r.inertia) > 0 ? Number(r.inertia) : 0, gs, rpm, minRpm, usedDefault, pW: power*UNIT_W[powerUnit.value], mass, drag};
+    return {idx:i, vname:r.vname.trim(), ename:r.ename.trim(), base, fc, rad, crr, rk, extraM: Number(r.inertia) > 0 ? Number(r.inertia) : 0, gs, rpm, minRpm, usedDefault, pW: power*UNIT_W.hp, mass, drag};
   }
 
   // ax: shared axis tops {v, r, f} (theoretical max x 1.1); nc: gear count used for the colour palette
   function drawPerf(cv, list, ax, nc) {
+    cv._redraw = () => drawPerf(cv, list, ax, nc);
     const c = cv.getContext("2d"), rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     if (rect.width < 10) return;
     cv.width = Math.round(rect.width*dpr); cv.height = Math.round(rect.height*dpr);
@@ -821,26 +971,29 @@
     const left=62, right=68, top=22, bottom=50, pw=w-left-right, ph=h-top-bottom;
     const vS = niceStep(ax.v, 8), rS = niceStep(ax.r, 12), fS = niceStep(ax.f, 12);
     const vMax = Math.max(vS, Math.ceil(ax.v/vS - 1e-9)*vS), rMax = Math.max(rS, Math.ceil(ax.r/rS - 1e-9)*rS), fMax = Math.max(fS, Math.ceil(ax.f/fS - 1e-9)*fS);
-    const X = v => left + v/vMax*pw, YF = f => top+ph - f/fMax*ph, YR = r => top+ph - r/rMax*ph;
-    cv._geo = {left, top, pw, ph, vMax, rMax, fMax, items:list};
+    const V = cv._view || {z:1, ox:0, oy:0}, Z = V.z;   // wheel zoom: visible window = [o, o + 1/Z] (normalised 0..1)
+    const vT = niceStep(ax.v/Z, 8), rT = niceStep(ax.r/Z, 12), fT = niceStep(ax.f/Z, 12);   // tick steps follow the visible range
+    const vLo = V.ox*vMax, vHi = (V.ox + 1/Z)*vMax, rLo = V.oy*rMax, rHi = (V.oy + 1/Z)*rMax, fLo = V.oy*fMax, fHi = (V.oy + 1/Z)*fMax;
+    const X = v => left + (v/vMax - V.ox)*Z*pw, YF = f => top+ph - (f/fMax - V.oy)*Z*ph, YR = r => top+ph - (r/rMax - V.oy)*Z*ph;
+    cv._geo = {left, top, pw, ph, vMax, rMax, fMax, items:list, z:Z, ox:V.ox, oy:V.oy};
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed", txt = dark ? "#f3f4f6" : "#17202a";
 
     c.lineWidth = 1; c.font = "12px system-ui,sans-serif";
-    for (let i=0; i*fS <= fMax + fS*1e-6; i++) {                       // left axis: traction (with grid)
-      const f = i*fS, y = YF(f);
+    for (let i=Math.ceil(fLo/fT - 1e-9); i*fT <= fHi + fT*1e-6; i++) {   // left axis: traction (with grid)
+      const f = i*fT, y = YF(f);
       c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
-      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText(f.toFixed(decOf(fS)), left-8, y);
+      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText(f.toFixed(decOf(fT)), left-8, y);
     }
-    for (let i=0; i*rS <= rMax + rS*1e-6; i++) {                       // right axis: RPM
-      const r = i*rS, y = YR(r);
+    for (let i=Math.ceil(rLo/rT - 1e-9); i*rT <= rHi + rT*1e-6; i++) {   // right axis: RPM
+      const r = i*rT, y = YR(r);
       c.strokeStyle = axis; c.beginPath(); c.moveTo(left+pw,y); c.lineTo(left+pw+4,y); c.stroke();
-      c.fillStyle = axis; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(r.toFixed(decOf(rS)), left+pw+8, y);
+      c.fillStyle = axis; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText(r.toFixed(decOf(rT)), left+pw+8, y);
     }
-    for (let i=0; i*vS <= vMax + vS*1e-6; i++) {                       // x axis: speed
-      const v = i*vS, x = X(v);
+    for (let i=Math.ceil(vLo/vT - 1e-9); i*vT <= vHi + vT*1e-6; i++) {   // x axis: speed
+      const v = i*vT, x = X(v);
       c.strokeStyle = grid; c.beginPath(); c.moveTo(x,top); c.lineTo(x,top+ph); c.stroke();
-      c.fillStyle = axis; c.textAlign = "center"; c.textBaseline = "top"; c.fillText(v.toFixed(decOf(vS)), x, top+ph+8);
+      c.fillStyle = axis; c.textAlign = "center"; c.textBaseline = "top"; c.fillText(v.toFixed(decOf(vT)), x, top+ph+8);
     }
     c.strokeStyle = axis; c.strokeRect(left, top, pw, ph);
     c.fillStyle = txt; c.font = "13px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "alphabetic";
@@ -854,10 +1007,11 @@
       c.strokeStyle = "#8a8f98"; c.fillStyle = "#8a8f98"; c.lineWidth = 1.2;
       c.font = "11px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom";
       res.drag.forEach(d => {
-        if (d.f > fMax) return;
-        const y = YF(d.f);
-        c.beginPath(); c.moveTo(left, y); c.lineTo(left+pw, y); c.stroke();
-        c.fillText(d.s + "%", left+pw-3, y-2);
+        if (d.f > fHi) return;
+        c.beginPath();
+        for (let j=0; j<=80; j++) { const vk = vLo + (vHi - vLo)*j/80, x = X(vk), y = YF(d.f + d.q*Math.pow(vk/3.6, 2)); j ? c.lineTo(x,y) : c.moveTo(x,y); }
+        c.stroke();
+        c.fillText(d.s + "%", left+pw-3, YF(d.f + d.q*Math.pow(vHi/3.6, 2))-2);
       });
     }
     res.gs.forEach((g, i) => {
@@ -867,7 +1021,8 @@
         c.strokeStyle = col; c.lineWidth = 2; c.setLineDash([8,5]);
         c.beginPath(); c.moveTo(X(0), YR(0)); c.lineTo(ex, ey); c.stroke(); c.setLineDash([]);
         c.fillStyle = col; c.font = "bold 12px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
-        c.fillText(g.n, Math.min(left+pw-8, Math.max(left+8, ex-8)), Math.max(top+10, ey-10));
+        const rEnd = Math.min(er, rHi, vHi/g.k), rBeg = Math.max(rLo, vLo/g.k);   // part of the line inside the visible window
+        if (rEnd >= rBeg) c.fillText(g.n, Math.min(left+pw-8, Math.max(left+8, X(g.k*rEnd)-8)), Math.max(top+10, YR(rEnd)-10));
       }
       if (showCurves.checked) {                                         // traction curves (solid) + peak dot
         c.strokeStyle = col; c.lineWidth = 2.5; c.beginPath();
@@ -906,7 +1061,7 @@
 
   function updatePerf() {
     updateAcc();
-    document.querySelectorAll(".pUnit").forEach(e => { e.textContent = powerUnit.value.toUpperCase(); });
+    $("matInfo").textContent = tr("matInfo").replace("{t}", MATS[matSel.value].track).replace("{w}", MATS[matSel.value].wheel).replace("{k}", MATS[matSel.value].rk.toExponential(1).replace("e-", "e-"));
     if ($("tab-perf").hidden) return;
     const res = [0,1].map(calcPerf);
     $("pError").textContent = res.map((r,i) => r && r.error ? `${tr("pVehicle")} ${i+1}: ${r.error}` : "").filter(Boolean).join(" ");
@@ -960,7 +1115,8 @@
       vl.style.cssText = `display:block;left:${g.left + u*g.pw}px;top:${g.top}px;height:${g.ph}px`;
       if (mode === "in") hl.style.cssText = `display:block;top:${g.top + w*g.ph}px;left:${g.left}px;width:${g.pw}px`;
       else hl.style.display = "none";
-      const html = mode === "in" ? (hovered && o.inTip ? o.inTip(g, u, 1 - w) : "") : (o.axisTip ? o.axisTip(g, u) : "");
+      const ud = g.ox + u/g.z, wd = g.oy + (1 - w)/g.z;   // position in the (zoomed) data window, normalised 0..1 (y from the bottom)
+      const html = mode === "in" ? (hovered && o.inTip ? o.inTip(g, ud, wd) : "") : (o.axisTip ? o.axisTip(g, ud) : "");
       if (!html) { tip.style.display = "none"; return; }
       tip.innerHTML = html;
       tip.style.cssText = o.pos === "bottom"
@@ -1064,7 +1220,7 @@
     missingMass:"Mass.Empty / Fuel",
     inertiaMass:"慣性質量 (kg)（回転体×2 + エンジン）",
     aModelSummary:"計算モデルと前提",
-    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 慣性質量)。抗力 = 車体重量 × g × (sinθ + 転がり抵抗係数 × cosθ)。車体重量は Mass.Empty + Fuel です。慣性質量は 2×trackMass + engineInertialMass（回転体の慣性は2倍、エンジン慣性は1倍）を貼り付け時に自動入力します（手動で変更も可能）。慣性質量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。転がり抵抗係数は、ゲーム内の処理通り、trackPhysMat が「wheel」の車両は0.0166、それ以外は0.05を自動で使います。空気抵抗は考慮しません。数値積分は0.01秒刻みです。",
+    aM1:"加速度 = (牽引力 − 抗力) ÷ (車体重量 + 慣性質量)。抗力 = 車体重量 × g × (sinθ + (転がり抵抗係数 + 2.5e-5 × v²) × cosθ)（v は m/s、resistanceK=2.5e-5・resistanceMult=1 固定）。車体重量は Mass.Empty + Fuel です。慣性質量は 2×trackMass + engineInertialMass（回転体の慣性は2倍、エンジン慣性は1倍）を貼り付け時に自動入力します（手動で変更も可能）。慣性質量は登坂力に影響せず慣性としてのみ働くため、抗力には含めません。転がり抵抗係数と rK は、「路面マテリアル」（soil / road）の選択と、trackPhysMat が「wheel」かどうかで決まります。空気抵抗は考慮しません。数値積分は0.01秒刻みです。",
     aM2:"発進は1速で、最低回転数以下でも最低回転数と同じトルク（基準トルク）が常に出るものとします。変速は使用中のギアが最高回転数に達した時点で行い、「変速ロス」の間だけ牽引力をゼロにします。変速後の回転数が最低回転数を下回る場合は最低回転数として扱います。",
     aM3:"最終ギアで最高回転数に達した時点を最高速度への到達とし、以降は一定速度とみなして400m到達時間を求めます。発進できない勾配、または最高回転数に達する前に牽引力と抗力が釣り合う場合は「到達不可（限界速度：xxkm/h）」と表示します。限界速度は到達できた最高速度で、400mはその速度が正であれば一定速度で走り続けるものとして計算します。"
   });
@@ -1091,13 +1247,13 @@
     missingMass:"Mass.Empty / Fuel",
     inertiaMass:"Inertial mass (kg) (rotating parts ×2 + engine)",
     aModelSummary:"Model and assumptions",
-    aM1:"Acceleration = (traction − resistance) ÷ (body mass + inertial mass). Resistance = body mass × g × (sinθ + Crr × cosθ). Body mass is Mass.Empty + Fuel. Inertial mass = 2 × trackMass + engineInertialMass (rotating parts counted twice, engine once); it is filled in automatically when text is pasted and can be edited. It does not affect climbing, so it acts only as inertia and is excluded from resistance. As in the game, Crr is chosen automatically: 0.0166 when trackPhysMat is 'wheel', otherwise 0.05. Air resistance is ignored. Step: 0.01 s.",
+    aM1:"Acceleration = (traction − resistance) ÷ (body mass + inertial mass). Resistance = body mass × g × (sinθ + (Crr + 2.5e-5 × v²) × cosθ), v in m/s (resistanceK = 2.5e-5, resistanceMult = 1 fixed). Body mass is Mass.Empty + Fuel. Inertial mass = 2 × trackMass + engineInertialMass (rotating parts counted twice, engine once); it is filled in automatically when text is pasted and can be edited. It does not affect climbing, so it acts only as inertia and is excluded from resistance. Crr and rK follow the selected surface material (soil / road) and whether trackPhysMat is 'wheel'. Air resistance is ignored. Step: 0.01 s.",
     aM2:"The launch is in 1st gear, and the base torque is always available even below minimum RPM. A shift happens when the gear in use reaches max RPM, and traction is zero for the shift loss. If RPM after an upshift falls below the minimum, it is treated as the minimum RPM.",
     aM3:"Reaching max RPM in the top gear counts as reaching top speed; speed is then constant and used to find the 400 m time. If the slope prevents launching, or traction balances resistance before max RPM, 'not reachable (limit speed: xx km/h)' is shown. The limit speed is the highest speed reached, and 400 m is still computed at that speed if it is positive."
   });
   const inertiaOf = (t, e) => (t === "" && e === "") ? "" : fmtNum(2*(+t || 0) + (+e || 0));
   const bodyMass = txt => { const e = blkNum(txt, "Empty"), f = blkNum(txt, "Fuel"); return e !== "" ? fmtNum(+e + (+f || 0)) : blkNum(txt, "TakeOff"); };
-  const aSlope = $("accSlope"), aOver = $("aOverlay"), DT = 0.01;
+  const aSlope = $("accSlope"), aOver = $("aOverlay");
   const aShowV = $("aShowV"), aShowD = $("aShowD");
   [aSlope, aOver, aShowV, aShowD].forEach(e => e.addEventListener("change", updateAcc));
   $("accLag").addEventListener("input", updateAcc);
@@ -1105,10 +1261,11 @@
   function simAcc(r, slope) {
     const crr = r.crr;
     const lag = Number($("accLag").value) > 0 ? Number($("accLag").value) : 0;
-    const th = Math.atan(slope/100), Rf = r.mass*G*(Math.sin(th) + crr*Math.cos(th)), M = r.mass + (r.extraM || 0);
+    const th = Math.atan(slope/100), M = r.mass + (r.extraM || 0), Rf0 = r.mass*G*Math.sin(th), Rc = r.mass*G*Math.cos(th);
+    const Rfv = vv => Rf0 + Rc*(crr + r.rk*vv*vv);   // vv: m/s
     const gs = r.gs, last = gs.length-1, pts = [{t:0, v:0, d:0, g:0}], sh = [];
     let gi = 0, v = 0, d = 0, t = 0, top = null, pause = 0;
-    for (let n=0; n<200000; n++) {
+    for (let n=0; n<SIM_MAX_STEPS; n++) {
       let g = gs[gi], rpm = Math.max(r.minRpm, v*3.6/g.k);
       if (pause <= 0 && rpm >= r.rpm - 1e-9) {
         if (gi === last) { top = {t, v, d}; break; }
@@ -1117,7 +1274,7 @@
       }
       const inPause = pause > 0, F = inPause ? 0 : r.base*r.fc(rpm/r.rpm)*g.tot/r.rad;
       if (inPause) pause -= DT;
-      const a = (F - Rf)/M;
+      const a = (F - Rfv(v))/M;
       if (!inPause && a <= 1e-4) break;
       const v2 = Math.max(0, v + a*DT); d += (v+v2)/2*DT; v = v2; t += DT;
       pts.push({t, v:v*3.6, d, g:gi});
@@ -1133,40 +1290,44 @@
   function drawAcc(cv, items, ax, nc) {
     const c = cv.getContext("2d"), rect = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     cv._geo = null; cv._items = items;
+    cv._redraw = () => drawAcc(cv, items, ax, nc);
     if (rect.width < 10) return;
     cv.width = Math.round(rect.width*dpr); cv.height = Math.round(rect.height*dpr);
     c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,rect.width,rect.height);
     if (!items.length || !ax) return;
     const sv = aShowV.checked, sd = aShowD.checked;
     const w = rect.width, h = rect.height, left = 58, right = 64, top = 18, bottom = 46, pw = w-left-right, ph = h-top-bottom;
-    const tS = niceStep(ax.t, 8), vS = niceStep(ax.v, 8), dS = niceStep(ax.d, 8);
+    const tS = niceStep(ax.t, 8), vS = niceStep(ax.v, 8), dS = niceStep(ax.d, 8);   // steps at 1x (they define the axis maxima)
     const tMax = Math.max(tS, Math.ceil(ax.t/tS - 1e-9)*tS), vMax = Math.max(vS, Math.ceil(ax.v/vS - 1e-9)*vS), dMax = Math.max(dS, Math.ceil(ax.d/dS - 1e-9)*dS);
-    const X = t => left + t/tMax*pw, YV = y => top+ph - y/vMax*ph, YD = y => top+ph - y/dMax*ph;
-    cv._geo = {left, top, pw, ph, tMax, vMax, dMax};
+    const V = cv._view || {z:1, ox:0, oy:0}, Z = V.z;   // wheel zoom: visible window = [o, o + 1/Z] (normalised 0..1)
+    const tT = niceStep(ax.t/Z, 8), vT = niceStep(ax.v/Z, 8), dT = niceStep(ax.d/Z, 8);   // tick steps follow the visible range
+    const tLo = V.ox*tMax, tHi = (V.ox + 1/Z)*tMax, vLo = V.oy*vMax, vHi = (V.oy + 1/Z)*vMax, dLo = V.oy*dMax, dHi = (V.oy + 1/Z)*dMax;
+    const X = t => left + (t/tMax - V.ox)*Z*pw, YV = y => top+ph - (y/vMax - V.oy)*Z*ph, YD = y => top+ph - (y/dMax - V.oy)*Z*ph;
+    cv._geo = {left, top, pw, ph, tMax, vMax, dMax, z:Z, ox:V.ox, oy:V.oy};
     const dark = matchMedia("(prefers-color-scheme: dark)").matches;
     const axis = dark ? "#cbd5e1" : "#596579", grid = dark ? "#374151" : "#e1e6ed", txt = dark ? "#f3f4f6" : "#17202a";
     c.lineWidth = 1; c.font = "12px system-ui,sans-serif";
-    if (sv) for (let i=0; i*vS <= vMax + vS*1e-6; i++) {            // left axis: speed (grid follows it)
-      const y = YV(i*vS); c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
-      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText((i*vS).toFixed(decOf(vS)), left-8, y);
+    if (sv) for (let i=Math.ceil(vLo/vT - 1e-9); i*vT <= vHi + vT*1e-6; i++) {            // left axis: speed (grid follows it)
+      const y = YV(i*vT); c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke();
+      c.fillStyle = axis; c.textAlign = "right"; c.textBaseline = "middle"; c.fillText((i*vT).toFixed(decOf(vT)), left-8, y);
     }
-    if (sd) for (let i=0; i*dS <= dMax + dS*1e-6; i++) {            // right axis: distance (grid only when speed is hidden)
-      const y = YD(i*dS);
+    if (sd) for (let i=Math.ceil(dLo/dT - 1e-9); i*dT <= dHi + dT*1e-6; i++) {            // right axis: distance (grid only when speed is hidden)
+      const y = YD(i*dT);
       if (!sv) { c.strokeStyle = grid; c.beginPath(); c.moveTo(left,y); c.lineTo(left+pw,y); c.stroke(); }
       c.strokeStyle = axis; c.beginPath(); c.moveTo(left+pw,y); c.lineTo(left+pw+4,y); c.stroke();
-      c.fillStyle = axis; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText((i*dS).toFixed(decOf(dS)), left+pw+8, y);
+      c.fillStyle = axis; c.textAlign = "left"; c.textBaseline = "middle"; c.fillText((i*dT).toFixed(decOf(dT)), left+pw+8, y);
     }
-    for (let i=0; i*tS <= tMax + tS*1e-6; i++) {
-      const x = X(i*tS); c.strokeStyle = grid; c.beginPath(); c.moveTo(x,top); c.lineTo(x,top+ph); c.stroke();
-      c.fillStyle = axis; c.textAlign = "center"; c.textBaseline = "top"; c.fillText((i*tS).toFixed(decOf(tS)), x, top+ph+8);
+    for (let i=Math.ceil(tLo/tT - 1e-9); i*tT <= tHi + tT*1e-6; i++) {
+      const x = X(i*tT); c.strokeStyle = grid; c.beginPath(); c.moveTo(x,top); c.lineTo(x,top+ph); c.stroke();
+      c.fillStyle = axis; c.textAlign = "center"; c.textBaseline = "top"; c.fillText((i*tT).toFixed(decOf(tT)), x, top+ph+8);
     }
     c.strokeStyle = axis; c.strokeRect(left, top, pw, ph);
     c.fillStyle = txt; c.font = "13px system-ui,sans-serif"; c.textAlign = "center"; c.textBaseline = "alphabetic";
     c.fillText(tr("aAxisT"), left+pw/2, h-8);
     if (sv) { c.save(); c.translate(15, top+ph/2); c.rotate(-Math.PI/2); c.fillText(tr("aAxisV"), 0, 0); c.restore(); }
     if (sd) { c.save(); c.translate(w-13, top+ph/2); c.rotate(Math.PI/2); c.fillText(tr("aAxisD"), 0, 0); c.restore(); }
-    c.save(); c.beginPath(); c.rect(left-6, top-6, pw+12, ph+12); c.clip();
-    if (sd && 400 <= dMax) {
+    c.save(); const cm = Z > 1 ? 0 : 6; c.beginPath(); c.rect(left-cm, top-cm, pw+2*cm, ph+2*cm); c.clip();
+    if (sd && 400 >= dLo && 400 <= dHi) {
       c.strokeStyle = "#8a8f98"; c.lineWidth = 1; c.setLineDash([2,4]); c.beginPath(); c.moveTo(left, YD(400)); c.lineTo(left+pw, YD(400)); c.stroke();
       c.fillStyle = "#8a8f98"; c.font = "11px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText("400 m", left+pw-4, YD(400)-2);
     }
@@ -1204,7 +1365,7 @@
     [0,1].forEach(i => { $("aCol"+i).hidden = !ok[i]; });
     const nc = Math.max(0, ...valid.map(r => r.gs.length));
     const mx = f => (Math.max(...valid.map(f)) || 1)*1.1;
-    const ax = valid.length ? {t: mx(r => r.sim.end.t), v: mx(r => Math.max(...r.sim.pts.map(p => p.v))), d: mx(r => r.sim.end.d)} : null;
+    const ax = valid.length ? {t: mx(r => r.sim.end.t), v: mx(r => r.sim.pts.reduce((m, p) => p.v > m ? p.v : m, 0)), d: mx(r => r.sim.end.d)} : null;
     const nm = (r,i) => r.vname || r.ename || `${tr("pVehicle")} ${i+1}`;
     const all = ok.map((r,k) => r && {sim:r.sim, name:nm(r,k), dash:ov && k === 1}).filter(Boolean);
     const fT = v => v == null ? tr("aNo") : v.toFixed(2) + " s";
@@ -1233,12 +1394,12 @@
       const g = me.cv._geo; if (!g) return aHide();
       const rect = me.cv.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
       if (x < g.left || x > g.left+g.pw || y < g.top || y > g.top+g.ph) return aHide();
-      const t = (x - g.left)/g.pw*g.tMax;
+      const t = (g.ox + (x - g.left)/g.pw/g.z)*g.tMax;
       const wy = (y - g.top)/g.ph;   // same relative height on every chart
       aX.forEach(o => {
         const og = o.cv._geo; o.tip.style.display = "none";
         if (!og || o.cv.getBoundingClientRect().width < 10) { o.vl.style.display = o.hl.style.display = "none"; return; }
-        o.vl.style.cssText = `display:block;left:${og.left + t/og.tMax*og.pw}px;top:${og.top}px;height:${og.ph}px`;
+        o.vl.style.cssText = `display:block;left:${og.left + (t/og.tMax - og.ox)*og.z*og.pw}px;top:${og.top}px;height:${og.ph}px`;
         o.hl.style.cssText = `display:block;top:${og.top + wy*og.ph}px;left:${og.left}px;width:${og.pw}px`;
       });
       me.tip.innerHTML = `<div><span>${tr("tipTime")}</span><b>${t.toFixed(2)} s</b></div>` + (me.cv._items || []).map(it => {
@@ -1250,6 +1411,66 @@
     });
     me.cv.addEventListener("pointerleave", aHide);
   });
+
+  // ---- Mouse-wheel zoom (all charts) ----
+  // Wheel over a chart zooms both axes by the same factor (1x..3x) around the cursor; axis ticks are recomputed for the visible range.
+  // Linked charts (left/right of one tab) share one view so that they stay comparable and the crosshair stays consistent.
+  Object.assign(translations.ja, {zoomReset:"拡大をリセット（1倍に戻す）"});
+  Object.assign(translations.en, {zoomReset:"Reset zoom (back to 1×)"});
+  const ZOOM_MAX = 3;
+  function setupZoom(ids) {
+    const V = {z:1, ox:0, oy:0}, cvs = ids.map($), btns = [];
+    let drag = null;
+    const sync = () => {
+      btns.forEach(b => { b.style.display = V.z > 1 ? "flex" : "none"; });
+      cvs.forEach(cv => { cv.style.touchAction = V.z > 1 ? "none" : ""; });
+    };
+    const redraw = () => { cvs.forEach(cv => cv._redraw && cv._redraw()); sync(); };
+    const reset = () => { V.z = 1; V.ox = V.oy = 0; redraw(); };
+    cvs.forEach(cv => {
+      cv._view = V;
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "zoom-reset";
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></svg>';
+      const label = () => { btn.title = btn.ariaLabel = `${tr("zoomReset")} ×${V.z.toFixed(1)}`; };
+      btn.addEventListener("pointerenter", label); label();
+      btn.addEventListener("click", reset);
+      cv.parentElement.appendChild(btn); btns.push(btn);
+      cv.addEventListener("wheel", e => {
+        const g = cv._geo; if (!g) return;
+        const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+        const z0 = V.z; let z1 = Math.min(ZOOM_MAX, Math.max(1, z0*Math.exp(-dy*0.002)));
+        if (z1 < 1.01) z1 = 1;
+        e.preventDefault();                    // never scroll the page while the wheel is over a chart (at any zoom level)
+        if (z1 === z0) return;
+        const rect = cv.getBoundingClientRect();
+        const u = Math.min(1, Math.max(0, (e.clientX - rect.left - g.left)/g.pw));        // cursor inside the plot, 0..1 (left -> right)
+        const w = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top - g.top)/g.ph));      // 0..1 (bottom -> top)
+        const px = V.ox + u/z0, py = V.oy + w/z0;                                         // data point under the cursor stays put
+        V.z = z1; V.ox = Math.min(1 - 1/z1, Math.max(0, px - u/z1)); V.oy = Math.min(1 - 1/z1, Math.max(0, py - w/z1));
+        redraw();
+        cv.dispatchEvent(new PointerEvent("pointermove", {clientX:e.clientX, clientY:e.clientY, bubbles:true}));   // refresh crosshair / tooltip
+      }, {passive:false});
+      // drag to pan while zoomed (the content follows the cursor)
+      cv.addEventListener("pointerdown", e => {
+        if (e.button !== 0 || V.z <= 1 || !cv._geo) return;
+        drag = {id:e.pointerId, x:e.clientX, y:e.clientY};
+        cv.setPointerCapture(e.pointerId); sync();
+      });
+      cv.addEventListener("pointermove", e => {
+        if (!drag || drag.id !== e.pointerId || !e.isTrusted) return;
+        const g = cv._geo; if (!g) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+        V.ox = Math.min(1 - 1/V.z, Math.max(0, V.ox - dx/(g.pw*V.z)));
+        V.oy = Math.min(1 - 1/V.z, Math.max(0, V.oy + dy/(g.ph*V.z)));
+        redraw();
+        cv.dispatchEvent(new PointerEvent("pointermove", {clientX:e.clientX, clientY:e.clientY, bubbles:true}));   // refresh crosshair / tooltip
+      });
+      const endDrag = e => { if (drag && drag.id === e.pointerId) { drag = null; sync(); } };
+      cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+    });
+  }
+  setupZoom(["chart0", "chart1"]); setupZoom(["pChart0", "pChart1"]); setupZoom(["aV0", "aV1"]);
 
   // ---- Tabs ----
   document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
@@ -1266,6 +1487,7 @@
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeHelp(); });
   $("language").addEventListener("change", e => { language = e.target.value; applyLanguage(); });
   powerUnit.addEventListener("change", refresh);
+  matSel.addEventListener("change", refresh);
   showTorque.addEventListener("change", update);
   $("eOverlay").addEventListener("change", update);
   showPower.addEventListener("change", update);
