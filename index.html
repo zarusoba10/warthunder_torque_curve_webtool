@@ -118,6 +118,7 @@
     <div class="titlebox"><h1 data-i18n="appTitle"></h1><button type="button" id="helpBtn" class="helpbtn" data-i18n="help"></button></div>
     <div class="toolbar">
       <button id="reset" data-i18n="reset"></button>
+      <button id="shareBtn" type="button" data-i18n="share"></button>
       <label style="margin:0"><span data-i18n="powerUnit"></span>
         <select id="powerUnit" style="width:auto;display:inline-block;margin-left:6px">
           <option value="hp">HP</option>
@@ -435,6 +436,7 @@
       configHint:"貼り付けるとエンジン情報を自動で読み込みます。",
       engineName:"エンジン名", maxOutput:"最大出力", maxRPM:"最大回転数", minRPM:"最低回転数",
       coefficients:"torqFormula の係数（空欄なら共通曲線）", exampleName:"例：AGT1500",
+      share:"共有URLをコピー", shareCopied:"コピーしました", shareNote:"共有URLには入力欄の数値・文字だけが含まれます（貼り付けたBLK本文は含まれません）。", statusShared:"共有URLから読み込み：",
       statusCleared:"設定テキストとエンジンパラメータをすべてクリアしました。",
       statusLoaded:"読み込みました。見つからない項目：",
       statusSuccess:"読み込み成功：", statusDefault:"（torqFormulaなし：共通曲線を使用）", statusError:"読み込めません：",
@@ -499,6 +501,7 @@
       configHint:"Engine data will be imported automatically when text is pasted.",
       engineName:"Engine name", maxOutput:"Maximum output", maxRPM:"Maximum RPM", minRPM:"Minimum RPM",
       coefficients:"torqFormula coefficients (blank = common curve)", exampleName:"e.g. AGT1500",
+      share:"Copy share URL", shareCopied:"Copied", shareNote:"The share URL contains only the input-field values (the pasted BLK text is not included).", statusShared:"Loaded from share URL: ",
       statusCleared:"Configuration text and all engine parameters have been cleared.",
       statusLoaded:"Loaded. Not found: ",
       statusSuccess:"Successfully loaded: ", statusDefault:" (no torqFormula: using common curve)", statusError:"Unable to load: ",
@@ -1494,6 +1497,85 @@
   absAxis.addEventListener("change", update);
   $("reset").addEventListener("click", () => pCards.forEach(c => c.querySelector(".pClear").click()));
   window.addEventListener("resize", refresh);
+
+  // =====================================================================
+  // Share URL: encodes the input-field values (NOT the pasted BLK text) into location.hash (#s=...)
+  // =====================================================================
+  const SHARE_BOOLS = ["showCurves","showLines","showPCurve","showOverlay","showDrag","eOverlay","showTorque","showPower","absAxis","aOverlay","aShowV","aShowD"];
+  const TABS = ["torque","perf","acc"];
+  const b64e = str => btoa(Array.from(new TextEncoder().encode(str), b => String.fromCharCode(b)).join("")).replaceAll("+","-").replaceAll("/","_").replace(/=+$/,"");
+  const b64d = str => { const t = str.replaceAll("-","+").replaceAll("_","/"); const bin = atob(t + "=".repeat((4 - t.length % 4) % 4)); return new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0))); };
+  const activeTab = () => { const b = document.querySelector(".tab.active"); return b ? b.dataset.tab : "torque"; };
+
+  function collectShare() {
+    const cards = [0,1].map(i => { const v = PFK.map(k => pfField(i,k).value); return v.every(x => x === "") ? null : v; });
+    if (cards.every(c => c === null)) return "";
+    const st = {
+      n:1, l:language, u:powerUnit.value, m:matSel.value, t:activeTab(),
+      c:cards, p:pPhys.map(x => x || ""),
+      f:SHARE_BOOLS.map(id => $(id) && $(id).checked ? "1" : "0").join(""),
+      s:aSlope.value, g:$("accLag").value
+    };
+    return b64e(JSON.stringify(st));
+  }
+  const shareUrl = () => { const c = collectShare(); return location.href.split("#")[0] + (c ? "#s=" + c : ""); };
+
+  function applyShare(code) {
+    let st;
+    try { st = JSON.parse(b64d(code)); } catch { return false; }
+    if (!st || typeof st !== "object" || !Array.isArray(st.c)) return false;
+    const str = v => (typeof v === "string" ? v.slice(0, 2000) : "");
+    if (st.l === "ja" || st.l === "en") { language = st.l; $("language").value = language; }
+    if (["hp","ps","kw"].includes(st.u)) powerUnit.value = st.u;
+    if (st.m in MATS) matSel.value = st.m;
+    [0,1].forEach(i => {
+      const c = st.c[i];
+      if (!Array.isArray(c)) return;
+      PFK.forEach((k, n) => { pfField(i,k).value = str(c[n]); });
+      pPhys[i] = str(Array.isArray(st.p) ? st.p[i] : "");
+      const label = str(c[0]) || str(c[1]);
+      pfStat[i] = {fn: () => `${tr("statusShared")}${label}`, cls: "ok"};
+      renderPfStat(i);
+    });
+    if (typeof st.f === "string") SHARE_BOOLS.forEach((id, n) => { if ($(id) && st.f[n] !== undefined) $(id).checked = st.f[n] === "1"; });
+    if ([...aSlope.options].some(o => o.value === String(st.s))) aSlope.value = String(st.s);
+    if (st.g !== undefined && Number.isFinite(Number(st.g))) $("accLag").value = String(st.g);
+    if (TABS.includes(st.t)) {
+      document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === st.t));
+      TABS.forEach(t => { $("tab-"+t).hidden = t !== st.t; });
+    }
+    return true;
+  }
+  function loadShared() {
+    const m = /^#s=([A-Za-z0-9_-]+)$/.exec(location.hash);
+    return m ? applyShare(m[1]) : false;
+  }
+  let shareTimer = null;
+  function syncHash() {
+    clearTimeout(shareTimer);
+    shareTimer = setTimeout(() => {
+      try { history.replaceState(null, "", shareUrl()); } catch { /* e.g. sandboxed frame: ignore */ }
+    }, 400);
+  }
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; } catch { /* fall through */ }
+    try {
+      const ta = document.createElement("textarea"); ta.value = t; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok;
+    } catch { return false; }
+  }
+  $("shareBtn").addEventListener("click", async () => {
+    const url = shareUrl(), b = $("shareBtn");
+    if (await copyText(url)) { b.textContent = tr("shareCopied"); setTimeout(() => { b.innerHTML = tr("share"); }, 1500); }
+    else window.prompt(tr("share"), url);
+  });
+  $("shareBtn").title = "";
+  document.addEventListener("input", syncHash);
+  document.addEventListener("change", syncHash);
+  document.addEventListener("click", e => { if (e.target.closest && e.target.closest(".tab, .pClear, #reset")) syncHash(); });
+  window.addEventListener("hashchange", () => { if (loadShared()) applyLanguage(); });
+  loadShared();
+
   $("language").value = language;
   applyLanguage();
 })();
